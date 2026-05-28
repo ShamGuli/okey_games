@@ -557,36 +557,39 @@ function updateSums() {
     sum2.classList.toggle("behind", s2 > s1);
   }
 
-  renderScoreDiff();
+  renderLeaderCard();
 }
 
-// Yuxarı indikatorda fərqi göstər: "{ad öndə} −{diff} xal"
-function renderScoreDiff() {
-  const ind = $("live-indicator");
-  if (!ind || !currentGame) return;
-  const span = ind.querySelector("span");
-  if (!span) return;
+// LİDER kartı — kim öndədir + fərq rəqəmi
+function renderLeaderCard() {
+  const card = $("leader-card");
+  if (!card || !currentGame) return;
+  const nameEl = $("leader-name");
+  const diffEl = $("leader-diff");
 
   const s1 = calcSum(currentGame.scores, 0);
   const s2 = calcSum(currentGame.scores, 1);
 
-  ind.classList.remove("tied", "empty");
+  card.classList.remove("tied", "empty");
 
   if (s1 === 0 && s2 === 0) {
-    ind.classList.add("empty");
-    span.textContent = "—";
+    card.classList.add("empty");
+    if (nameEl) nameEl.textContent = "—";
+    if (diffEl) diffEl.textContent = "—";
     return;
   }
 
   if (s1 === s2) {
-    ind.classList.add("tied");
-    span.textContent = "Bərabər";
+    card.classList.add("tied");
+    if (nameEl) nameEl.textContent = "Bərabər";
+    if (diffEl) diffEl.textContent = "0";
     return;
   }
 
   const leadingName = s1 < s2 ? currentGame.player1 : currentGame.player2;
   const diff = Math.abs(s1 - s2);
-  span.textContent = `${leadingName} −${diff} xal`;
+  if (nameEl) nameEl.textContent = leadingName;
+  if (diffEl) diffEl.textContent = String(diff);
 }
 
 function updateCellDOM(round, col) {
