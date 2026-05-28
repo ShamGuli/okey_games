@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#b8924d">
+  <meta name="description" content="OKEY — canlı xal vərəqi. İki oyunçu, 5 raund, real vaxtda izləmə.">
+  <title>OKEY — Canlı Xal Vərəqi</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🎴%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+  <header class="header">
+    <div class="logo">OKEY</div>
+    <a href="/history.html" class="nav-link">Keçmiş Oyunlar →</a>
+  </header>
+
+  <main class="container">
+    <!-- ===== Home view ===== -->
+    <div id="home-view">
+      <div class="card">
+        <h2 class="card-title">Yeni Oyun</h2>
+        <input
+          type="text"
+          id="player1-input"
+          class="input"
+          placeholder="Oyunçu 1"
+          maxlength="30"
+          autocomplete="off">
+        <input
+          type="text"
+          id="player2-input"
+          class="input"
+          placeholder="Oyunçu 2"
+          maxlength="30"
+          autocomplete="off">
+        <button id="start-game-btn" class="btn btn-primary">Oyuna Başla</button>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Oyuna Qoşul</h2>
+        <input
+          type="text"
+          id="join-code-input"
+          class="input"
+          placeholder="4 rəqəmli kod"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          maxlength="4"
+          autocomplete="off">
+        <button id="join-game-btn" class="btn btn-secondary">Qoşul</button>
+        <div id="join-message"></div>
+      </div>
+    </div>
+
+    <!-- ===== Game view ===== -->
+    <div id="game-view" style="display: none;">
+      <div class="join-code">
+        <div class="join-code-label">Rəqibə bu kodu de</div>
+        <div class="join-code-value" id="join-code-display">----</div>
+        <button id="copy-code-btn" class="copy-btn">Kopyala</button>
+      </div>
+
+      <div class="game-toolbar">
+        <div class="live-indicator" id="live-indicator">
+          <div class="live-dot"></div>
+          <span>Bağlanır...</span>
+        </div>
+        <button id="new-game-btn" class="btn btn-small btn-secondary">Yeni Oyun</button>
+      </div>
+
+      <div id="winner-container"></div>
+
+      <div class="score-table-wrap">
+        <table class="score-table" id="score-table">
+          <thead>
+            <tr>
+              <th class="round-label">Əl</th>
+              <th id="player1-header">Oyunçu 1</th>
+              <th id="player2-header">Oyunçu 2</th>
+              <th class="delete-cell"></th>
+            </tr>
+          </thead>
+          <tbody id="score-tbody"></tbody>
+          <tfoot>
+            <tr class="sum-row">
+              <td class="round-label">Σ</td>
+              <td id="sum1" class="score-cell">0</td>
+              <td id="sum2" class="score-cell">0</td>
+              <td class="delete-cell"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/js/supabase.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

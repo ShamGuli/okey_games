@@ -1,0 +1,16 @@
+# Mühit dəyişənləri (kodda heç vaxt olmasın)
+.env
+.env.local
+.env.*.local
+
+# Asılılıqlar
+node_modules/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Vercel
+.vercel/
