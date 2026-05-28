@@ -120,6 +120,25 @@ function customConfirm(title, message, okText = "Davam et", cancelText = "Ləğv
 // UTILITIES
 // =====================================================================
 
+// Əvvəlki row-larda ilk boş xananı tap (yoxsa null)
+function findFirstIncompleteCell(scores, beforeRound) {
+  for (let r = 0; r < beforeRound; r++) {
+    if (scores[r][0] === null) return { round: r, col: 0 };
+    if (scores[r][1] === null) return { round: r, col: 1 };
+  }
+  return null;
+}
+
+// Müəyyən xanaya fokus + select
+function focusCell(round, col) {
+  const input = document.querySelector(
+    `.score-input[data-round="${round}"][data-col="${col}"]`
+  );
+  if (!input) return;
+  input.focus();
+  try { input.select(); } catch (_) {}
+}
+
 function uuid() {
   if (window.crypto?.randomUUID) return crypto.randomUUID();
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
@@ -337,6 +356,7 @@ async function onScoreBlur(e) {
   const currentValue = currentGame.scores[round][col];
   const raw = input.value.trim();
 
+  // Boş → mövcud dəyəri qoru
   if (!raw) {
     if (currentValue !== null) input.value = String(currentValue);
     return;
@@ -348,9 +368,36 @@ async function onScoreBlur(e) {
     return;
   }
 
+  // Dəyər dəyişməyibsə heç nə etmə
   if (value === currentValue) return;
 
+  // Validation: əvvəlki row-lar tam dolu olmalıdır
+  const incomplete = findFirstIncompleteCell(currentGame.scores, round);
+  if (incomplete) {
+    input.value = currentValue !== null ? String(currentValue) : "";
+    const playerName = incomplete.col === 0
+      ? currentGame.player1
+      : currentGame.player2;
+    toast(
+      `${incomplete.round + 1}-ci əldə "${playerName}" xanası boşdur — əvvəl onu yaz`,
+      "error",
+      3500
+    );
+    requestAnimationFrame(() => focusCell(incomplete.round, incomplete.col));
+    return;
+  }
+
   await updateScore(round, col, value, currentValue);
+
+  // Auto-focus: col 0 → col 1 (eyni row, hələ boşdursa) — klaviatura qalır
+  // col 1 doldursa, render input-u mətnə çevirir, klaviatura təbii itir
+  if (
+    col === 0 &&
+    currentGame.status !== "finished" &&
+    currentGame.scores[round][1] === null
+  ) {
+    requestAnimationFrame(() => focusCell(round, 1));
+  }
 }
 
 async function updateScore(round, col, value, oldValue) {

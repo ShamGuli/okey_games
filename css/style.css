@@ -49,10 +49,13 @@ html, body {
   min-height: 100vh;
 }
 
-/* ----- Header ----- */
+/* ----- Header (kompakt, logo sol / link sağ) ----- */
 .header {
-  text-align: center;
-  padding: 20px 16px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
   background: var(--card);
   border-bottom: 2px solid var(--accent);
   box-shadow: var(--shadow);
@@ -61,21 +64,28 @@ html, body {
   z-index: 50;
 }
 .logo {
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 800;
-  letter-spacing: 6px;
+  letter-spacing: 5px;
   color: var(--accent);
+  line-height: 1;
 }
 .nav-link {
-  display: inline-block;
-  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   color: var(--muted);
   text-decoration: none;
   font-size: 13px;
-  padding: 4px 8px;
-  transition: color var(--transition);
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 8px;
+  transition: color var(--transition), background var(--transition);
 }
-.nav-link:hover { color: var(--accent); }
+.nav-link:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
 
 /* ----- Layout ----- */
 .container {
@@ -585,7 +595,7 @@ html, body {
 
 /* ----- Responsive ----- */
 @media (min-width: 600px) {
-  .logo { font-size: 30px; letter-spacing: 8px; }
+  .logo { font-size: 26px; letter-spacing: 6px; }
   .container { padding: 24px 16px 40px; }
   .score-table th,
   .score-table td { padding: 16px 12px; }
