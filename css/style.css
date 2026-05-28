@@ -235,11 +235,11 @@ html, body {
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  font-weight: 600;
-  color: var(--muted);
+  font-weight: 700;
+  color: var(--success);
   padding: 6px 14px;
-  background: var(--card);
-  border: 1px solid var(--border);
+  background: var(--success-soft);
+  border: 1px solid var(--success);
   border-radius: 999px;
   transition: all var(--transition);
 }
@@ -247,18 +247,24 @@ html, body {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #ccc;
+  background: var(--success);
   transition: background var(--transition);
 }
-.live-indicator.live {
-  color: var(--success);
-  border-color: var(--success);
-  background: var(--success-soft);
-}
 .live-indicator.live .live-dot {
-  background: var(--success);
   animation: live-pulse 2s ease-in-out infinite;
 }
+.live-indicator.tied {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.live-indicator.tied .live-dot { background: var(--accent); }
+.live-indicator.empty {
+  color: var(--muted);
+  border-color: var(--border);
+  background: var(--card);
+}
+.live-indicator.empty .live-dot { background: #ccc; }
 @keyframes live-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50%      { opacity: 0.5; transform: scale(1.25); }

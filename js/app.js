@@ -353,14 +353,11 @@ function renderScoreTable() {
       const wrap = document.createElement("div");
       wrap.className = "action-wrap";
 
-      // × silmə (xal varsa — kilidli də olsa rowu sıfırlamaq mümkündür)
-      // Kilidli rowda rəqəmləri dəyişmək yox, amma rowu tam sıfırlamaq olar
-      if (rowHasValue) {
+      // × silmə (yalnız kilidi açıq olan və xalı dolu rowda)
+      if (!isLocked && rowHasValue) {
         const delBtn = document.createElement("button");
         delBtn.className = "delete-row-btn";
-        delBtn.title = isLocked
-          ? `${i + 1}-ci əli tam sıfırla (kilid açılır)`
-          : `${i + 1}-ci əli sıfırla`;
+        delBtn.title = `${i + 1}-ci əli sıfırla`;
         delBtn.innerHTML = "×";
         delBtn.addEventListener("click", () => deleteRow(i));
         wrap.appendChild(delBtn);
@@ -559,6 +556,37 @@ function updateSums() {
     sum2.classList.toggle("leading", s2 < s1);
     sum2.classList.toggle("behind", s2 > s1);
   }
+
+  renderScoreDiff();
+}
+
+// Yuxarı indikatorda fərqi göstər: "{ad öndə} −{diff} xal"
+function renderScoreDiff() {
+  const ind = $("live-indicator");
+  if (!ind || !currentGame) return;
+  const span = ind.querySelector("span");
+  if (!span) return;
+
+  const s1 = calcSum(currentGame.scores, 0);
+  const s2 = calcSum(currentGame.scores, 1);
+
+  ind.classList.remove("tied", "empty");
+
+  if (s1 === 0 && s2 === 0) {
+    ind.classList.add("empty");
+    span.textContent = "—";
+    return;
+  }
+
+  if (s1 === s2) {
+    ind.classList.add("tied");
+    span.textContent = "Bərabər";
+    return;
+  }
+
+  const leadingName = s1 < s2 ? currentGame.player1 : currentGame.player2;
+  const diff = Math.abs(s1 - s2);
+  span.textContent = `${leadingName} −${diff} xal`;
 }
 
 function updateCellDOM(round, col) {
@@ -627,20 +655,18 @@ function updateCellDOM(round, col) {
     return;
   }
 
-  // Delete button (kilidli rowda da görünür — sıfırlama üçün)
+  // Delete button (yalnız kilidi açıq + xal varsa)
   let delBtn = wrap.querySelector(".delete-row-btn");
-  if (rowHasValue && !delBtn) {
+  if (!isLocked && rowHasValue && !delBtn) {
     const newDelBtn = document.createElement("button");
     newDelBtn.className = "delete-row-btn";
-    newDelBtn.title = isLocked
-      ? `${round + 1}-ci əli tam sıfırla (kilid açılır)`
-      : `${round + 1}-ci əli sıfırla`;
+    newDelBtn.title = `${round + 1}-ci əli sıfırla`;
     newDelBtn.innerHTML = "×";
     newDelBtn.addEventListener("click", () => deleteRow(round));
     const lockBtn = wrap.querySelector(".lock-row-btn");
     if (lockBtn) wrap.insertBefore(newDelBtn, lockBtn);
     else wrap.appendChild(newDelBtn);
-  } else if (!rowHasValue && delBtn) {
+  } else if ((isLocked || !rowHasValue) && delBtn) {
     delBtn.remove();
   }
 
@@ -818,24 +844,17 @@ async function lockRow(round) {
 
   currentGame = data || Object.assign({}, currentGame, { locked: lockedArr });
   renderGame();
-  toast(
-    isLocked
-      ? `${round + 1}-ci əl açıldı 🔓`
-      : `${round + 1}-ci əl kilidləndi 🔒`,
-    "success"
-  );
 }
 
 // =====================================================================
 // REALTIME
 // =====================================================================
 
-function setLiveStatus(isLive, text) {
+function setLiveStatus(isLive) {
+  // Yalnız "live" class-i toggle edir — span text artıq score diff göstərir
   const ind = $("live-indicator");
   if (!ind) return;
   ind.classList.toggle("live", isLive);
-  const span = ind.querySelector("span");
-  if (span) span.textContent = text;
 }
 
 function cleanupRealtime() {
