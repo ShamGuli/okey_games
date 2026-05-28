@@ -258,7 +258,9 @@ function renderScoreTable() {
         input.inputMode = "numeric";
         input.pattern = "[0-9]*";
         input.autocomplete = "off";
-        input.className = "score-input" + (wasEdited ? " edited" : "");
+        input.className = "score-input"
+          + (wasEdited ? " edited" : "")
+          + (val === -101 ? " end" : "");
         input.maxLength = 4;
         input.placeholder = "—";
         input.dataset.round = i;
@@ -268,6 +270,18 @@ function renderScoreTable() {
         input.addEventListener("keydown", onScoreKeydown);
         input.addEventListener("blur", onScoreBlur);
         td.appendChild(input);
+
+        // "🏁 Bitdi" quick düyməsi → bu xanaya −101 yazır
+        // (klavyatura mənfi qəbul etmir, ona görə manual yazmaq əvəzinə)
+        if (val !== -101) {
+          const quickBtn = document.createElement("button");
+          quickBtn.type = "button";
+          quickBtn.className = "quick-end-btn";
+          quickBtn.textContent = "🏁 Bitdi";
+          quickBtn.title = "Bu xanaya −101 yaz (OKEY qaydası — bitənə)";
+          quickBtn.addEventListener("click", () => quickEnd(i, col));
+          td.appendChild(quickBtn);
+        }
 
         if (wasEdited) {
           const mark = document.createElement("span");
@@ -279,7 +293,12 @@ function renderScoreTable() {
         if (val !== null) {
           td.className = "score-cell";
           const text = document.createElement("span");
-          text.textContent = val;
+          if (val === -101) {
+            text.className = "end-badge";
+            text.textContent = "🏁 −101";
+          } else {
+            text.textContent = val;
+          }
           td.appendChild(text);
           if (wasEdited) {
             const mark = document.createElement("span");
@@ -488,6 +507,30 @@ async function deleteRow(round) {
   currentGame = data || Object.assign({}, currentGame, updates);
   renderGame();
   toast(`${round + 1}-ci əl silindi`, "success");
+}
+
+// "🏁 Bitdi" düyməsi — xanaya −101 yazır (OKEY qaydası)
+async function quickEnd(round, col) {
+  if (!isOwner || !ownerToken) return;
+  const currentValue = currentGame.scores[round][col];
+  if (currentValue === -101) return;
+
+  // Validation: əvvəlki row-lar tam dolu olmalıdır
+  const incomplete = findFirstIncompleteCell(currentGame.scores, round);
+  if (incomplete) {
+    const playerName = incomplete.col === 0
+      ? currentGame.player1
+      : currentGame.player2;
+    toast(
+      `${incomplete.round + 1}-ci əldə "${playerName}" xanası boşdur — əvvəl onu yaz`,
+      "error",
+      3500
+    );
+    requestAnimationFrame(() => focusCell(incomplete.round, incomplete.col));
+    return;
+  }
+
+  await updateScore(round, col, -101, currentValue);
 }
 
 // =====================================================================

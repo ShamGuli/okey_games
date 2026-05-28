@@ -92,19 +92,25 @@ function openDetail(id) {
 
   const editMark = '<span class="edit-mark">✎ düzəldildi</span>';
 
+  const cellDisplay = (v) => {
+    if (v === null) return "—";
+    if (v === -101) return '<span class="end-badge">🏁 −101</span>';
+    return String(v);
+  };
+
   let rowsHTML = "";
   for (let i = 0; i < 5; i++) {
-    const v1 = g.scores[i][0] !== null ? g.scores[i][0] : "—";
-    const v2 = g.scores[i][1] !== null ? g.scores[i][1] : "—";
-    const empty1 = g.scores[i][0] === null ? " empty" : "";
-    const empty2 = g.scores[i][1] === null ? " empty" : "";
-    const mark1 = edited[i][0] && g.scores[i][0] !== null ? editMark : "";
-    const mark2 = edited[i][1] && g.scores[i][1] !== null ? editMark : "";
+    const v1raw = g.scores[i][0];
+    const v2raw = g.scores[i][1];
+    const empty1 = v1raw === null ? " empty" : "";
+    const empty2 = v2raw === null ? " empty" : "";
+    const mark1 = edited[i][0] && v1raw !== null ? editMark : "";
+    const mark2 = edited[i][1] && v2raw !== null ? editMark : "";
     rowsHTML += `
       <tr>
         <td class="round-label">${i + 1}</td>
-        <td class="score-cell${empty1}">${v1}${mark1}</td>
-        <td class="score-cell${empty2}">${v2}${mark2}</td>
+        <td class="score-cell${empty1}">${cellDisplay(v1raw)}${mark1}</td>
+        <td class="score-cell${empty2}">${cellDisplay(v2raw)}${mark2}</td>
       </tr>
     `;
   }

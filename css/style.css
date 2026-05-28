@@ -363,6 +363,50 @@ html, body {
   opacity: 0.85;
 }
 
+/* OKEY bitirənə −101: input vurğu + quick düymə + viewer badge */
+.score-input.end {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 800;
+}
+.quick-end-btn {
+  display: inline-block;
+  margin-top: 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  line-height: 1.2;
+  transition: background var(--transition), border-color var(--transition), transform var(--transition);
+}
+.quick-end-btn:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.quick-end-btn:active { transform: scale(0.95); }
+
+.end-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
 .delete-cell { width: 40px; }
 .delete-row-btn {
   background: transparent;
