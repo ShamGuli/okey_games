@@ -1,7 +1,7 @@
 // =====================================================================
 // OKEY — Əsas oyun məntiqi
-// Yalnız owner xal yazır (qoşulma UI yoxdur).
-// Xanalar həmişə edit oluna bilər; edit edildikdə "düzəldildi" qeydi qalır.
+// Yalnız owner xal yazır. Xanalar həmişə edit oluna bilər, edit
+// edildikdə altında "✎ düzəldildi" qeydi qalır.
 // =====================================================================
 
 // ----- State -----
@@ -16,6 +16,105 @@ const LS_CURRENT_GAME = "okey_current_game_id";
 const LS_OWNER_PREFIX = "okey_owner_";
 
 const $ = (id) => document.getElementById(id);
+
+// =====================================================================
+// UI HELPERS — toast, form-message, custom confirm
+// =====================================================================
+
+function escapeHTML(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+// Button altında inline mesaj (qırmızı/yaşıl)
+function showFormMessage(elementId, message, type, duration = 4000) {
+  const el = $(elementId);
+  if (!el) return;
+  el.textContent = message;
+  el.className = `form-message show ${type}`;
+  clearTimeout(el._timer);
+  if (duration > 0) {
+    el._timer = setTimeout(() => {
+      el.className = "form-message";
+    }, duration);
+  }
+}
+
+function clearFormMessage(elementId) {
+  const el = $(elementId);
+  if (!el) return;
+  clearTimeout(el._timer);
+  el.className = "form-message";
+  el.textContent = "";
+}
+
+// Toast bildiriş (yuxarıdan)
+function toast(message, type = "info", duration = 2500) {
+  const container = $("toast-container");
+  if (!container) {
+    console[type === "error" ? "error" : "log"](message);
+    return;
+  }
+  const el = document.createElement("div");
+  el.className = `toast ${type}`;
+  const icons = { error: "⚠", success: "✓", info: "ℹ" };
+  el.innerHTML =
+    `<span class="toast-icon">${icons[type] || ""}</span>` +
+    `<span class="toast-text">${escapeHTML(message)}</span>`;
+  container.appendChild(el);
+  setTimeout(() => {
+    el.classList.add("exit");
+    setTimeout(() => el.remove(), 220);
+  }, duration);
+}
+
+// Native confirm əvəzinə custom modal
+function customConfirm(title, message, okText = "Davam et", cancelText = "Ləğv et") {
+  return new Promise((resolve) => {
+    const modal = $("confirm-modal");
+    const titleEl = $("confirm-title");
+    const msgEl = $("confirm-message");
+    const okBtn = $("confirm-ok");
+    const cancelBtn = $("confirm-cancel");
+
+    if (!modal || !okBtn || !cancelBtn) {
+      // Fallback — modal yoxdursa native istifadə et
+      resolve(window.confirm(`${title}\n\n${message}`));
+      return;
+    }
+
+    titleEl.textContent = title;
+    msgEl.textContent = message;
+    okBtn.textContent = okText;
+    cancelBtn.textContent = cancelText;
+
+    const cleanup = () => {
+      modal.style.display = "none";
+      document.body.style.overflow = "";
+      okBtn.removeEventListener("click", onOk);
+      cancelBtn.removeEventListener("click", onCancel);
+      modal.removeEventListener("click", onOverlay);
+      document.removeEventListener("keydown", onKey);
+    };
+    const onOk = () => { cleanup(); resolve(true); };
+    const onCancel = () => { cleanup(); resolve(false); };
+    const onOverlay = (e) => { if (e.target === modal) onCancel(); };
+    const onKey = (e) => {
+      if (e.key === "Escape") onCancel();
+      if (e.key === "Enter") onOk();
+    };
+
+    okBtn.addEventListener("click", onOk);
+    cancelBtn.addEventListener("click", onCancel);
+    modal.addEventListener("click", onOverlay);
+    document.addEventListener("keydown", onKey);
+
+    modal.style.display = "flex";
+    document.body.style.overflow = "hidden";
+    setTimeout(() => okBtn.focus(), 50);
+  });
+}
 
 // =====================================================================
 // UTILITIES
@@ -52,13 +151,7 @@ function calcWinner(scores, p1, p2) {
   return "tie";
 }
 
-function escapeHTML(s) {
-  return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  }[c]));
-}
-
-// Backend-də saxlanılır, UI-də görünmür (cədvəlin unique not null sütunu)
+// Backend üçün unikal join_code (UI-də görünmür, schema tələbi)
 async function generateUniqueJoinCode() {
   for (let i = 0; i < 25; i++) {
     const code = String(Math.floor(1000 + Math.random() * 9000));
@@ -72,7 +165,6 @@ async function generateUniqueJoinCode() {
   throw new Error("Kod yaradıla bilmədi. Yenidən cəhd et.");
 }
 
-// edited sahəsi köhnə oyunlarda olmaya bilər — təhlükəsiz oxu
 function safeEdited(game) {
   if (Array.isArray(game?.edited) && game.edited.length === 5) return game.edited;
   return emptyEdited();
@@ -83,18 +175,23 @@ function safeEdited(game) {
 // =====================================================================
 
 function showHome() {
-  $("home-view").style.display = "";
-  $("game-view").style.display = "none";
-  $("player1-input").value = "";
-  $("player2-input").value = "";
-  $("player1-input").classList.remove("error");
-  $("player2-input").classList.remove("error");
+  const home = $("home-view");
+  const game = $("game-view");
+  if (home) home.style.display = "";
+  if (game) game.style.display = "none";
+  const p1 = $("player1-input");
+  const p2 = $("player2-input");
+  if (p1) { p1.value = ""; p1.classList.remove("error"); }
+  if (p2) { p2.value = ""; p2.classList.remove("error"); }
+  clearFormMessage("start-message");
   cleanupRealtime();
 }
 
 function showGame() {
-  $("home-view").style.display = "none";
-  $("game-view").style.display = "";
+  const home = $("home-view");
+  const game = $("game-view");
+  if (home) home.style.display = "none";
+  if (game) game.style.display = "";
   renderGame();
 }
 
@@ -104,14 +201,17 @@ function showGame() {
 
 function renderGame() {
   if (!currentGame) return;
-  $("player1-header").textContent = currentGame.player1;
-  $("player2-header").textContent = currentGame.player2;
+  const p1Header = $("player1-header");
+  const p2Header = $("player2-header");
+  if (p1Header) p1Header.textContent = currentGame.player1;
+  if (p2Header) p2Header.textContent = currentGame.player2;
   renderScoreTable();
   renderWinner();
 }
 
 function renderScoreTable() {
   const tbody = $("score-tbody");
+  if (!tbody || !currentGame) return;
   tbody.innerHTML = "";
 
   const scores = currentGame.scores;
@@ -134,7 +234,6 @@ function renderScoreTable() {
       const wasEdited = edited[i][col] === true;
 
       if (isOwner) {
-        // Owner — həmişə redaktə oluna bilər
         const input = document.createElement("input");
         input.type = "text";
         input.inputMode = "numeric";
@@ -142,6 +241,7 @@ function renderScoreTable() {
         input.autocomplete = "off";
         input.className = "score-input" + (wasEdited ? " edited" : "");
         input.maxLength = 4;
+        input.placeholder = "—";
         input.dataset.round = i;
         input.dataset.col = col;
         if (val !== null) input.value = String(val);
@@ -157,7 +257,6 @@ function renderScoreTable() {
           td.appendChild(mark);
         }
       } else {
-        // Read-only baxış
         if (val !== null) {
           td.className = "score-cell";
           const text = document.createElement("span");
@@ -177,7 +276,6 @@ function renderScoreTable() {
       tr.appendChild(td);
     }
 
-    // Sil düyməsi (yalnız owner + sətirdə xal varsa)
     const tdDel = document.createElement("td");
     tdDel.className = "delete-cell";
     if (isOwner && rowHasValue) {
@@ -193,12 +291,15 @@ function renderScoreTable() {
     tbody.appendChild(tr);
   }
 
-  $("sum1").textContent = calcSum(scores, 0);
-  $("sum2").textContent = calcSum(scores, 1);
+  const sum1 = $("sum1");
+  const sum2 = $("sum2");
+  if (sum1) sum1.textContent = calcSum(scores, 0);
+  if (sum2) sum2.textContent = calcSum(scores, 1);
 }
 
 function renderWinner() {
   const container = $("winner-container");
+  if (!container) return;
   if (currentGame.status !== "finished") {
     container.innerHTML = "";
     return;
@@ -206,13 +307,12 @@ function renderWinner() {
   const w = currentGame.winner;
   const trophy = w === "tie" ? "🤝" : "🏆";
   const name = w === "tie" ? "Bərabərlik" : w;
-  container.innerHTML = `
-    <div class="winner-box">
-      <div class="winner-trophy">${trophy}</div>
-      <div class="winner-label">Qalib</div>
-      <div class="winner-name">${escapeHTML(name)}</div>
-    </div>
-  `;
+  container.innerHTML =
+    '<div class="winner-box">' +
+    `<div class="winner-trophy">${trophy}</div>` +
+    '<div class="winner-label">Qalib</div>' +
+    `<div class="winner-name">${escapeHTML(name)}</div>` +
+    "</div>";
 }
 
 // =====================================================================
@@ -237,7 +337,6 @@ async function onScoreBlur(e) {
   const currentValue = currentGame.scores[round][col];
   const raw = input.value.trim();
 
-  // Boş → mövcud dəyəri qoru
   if (!raw) {
     if (currentValue !== null) input.value = String(currentValue);
     return;
@@ -249,7 +348,6 @@ async function onScoreBlur(e) {
     return;
   }
 
-  // Dəyər dəyişməyibsə heç nə etmə
   if (value === currentValue) return;
 
   await updateScore(round, col, value, currentValue);
@@ -262,7 +360,6 @@ async function updateScore(round, col, value, oldValue) {
   newScores[round][col] = value;
 
   const newEdited = safeEdited(currentGame).map((r) => [...r]);
-  // Yalnız boş olmayan xananın dəyişdirilməsi "edit" sayılır
   if (oldValue !== null && oldValue !== value) {
     newEdited[round][col] = true;
   }
@@ -290,22 +387,35 @@ async function updateScore(round, col, value, oldValue) {
 
   if (error) {
     console.error("Update xətası:", error);
-    alert("Xal yazıla bilmədi: " + error.message);
+    toast("Xal yazıla bilmədi: " + error.message, "error", 4000);
     return;
   }
 
   currentGame = data || Object.assign({}, currentGame, updates);
   renderGame();
+
+  if (newStatus === "finished" && currentGame.status === "finished") {
+    toast(
+      newWinner === "tie" ? "Bərabərlik 🤝" : `Qalib: ${newWinner} 🏆`,
+      "success",
+      3500
+    );
+  }
 }
 
 async function deleteRow(round) {
   if (!isOwner || !ownerToken) return;
-  if (!confirm(`${round + 1}-ci əli tam silmək istəyirsən?`)) return;
+  const ok = await customConfirm(
+    "Əli sil",
+    `${round + 1}-ci əldəki xallar tam silinəcək. Davam edək?`,
+    "Sil",
+    "Ləğv et"
+  );
+  if (!ok) return;
 
   const newScores = currentGame.scores.map((r) => [...r]);
   newScores[round] = [null, null];
 
-  // Silinən sətirdə edit flag-ları da sıfırlansın
   const newEdited = safeEdited(currentGame).map((r) => [...r]);
   newEdited[round] = [false, false];
 
@@ -324,22 +434,25 @@ async function deleteRow(round) {
     .maybeSingle();
 
   if (error) {
-    alert("Silinə bilmədi: " + error.message);
+    toast("Silinə bilmədi: " + error.message, "error", 4000);
     return;
   }
 
   currentGame = data || Object.assign({}, currentGame, updates);
   renderGame();
+  toast(`${round + 1}-ci əl silindi`, "success");
 }
 
 // =====================================================================
-// REALTIME (eyni oyunu başqa cihazda davam etdirmək üçün)
+// REALTIME
 // =====================================================================
 
 function setLiveStatus(isLive, text) {
   const ind = $("live-indicator");
+  if (!ind) return;
   ind.classList.toggle("live", isLive);
-  ind.querySelector("span").textContent = text;
+  const span = ind.querySelector("span");
+  if (span) span.textContent = text;
 }
 
 function cleanupRealtime() {
@@ -368,7 +481,7 @@ function subscribeRealtime(gameId) {
       "postgres_changes",
       { event: "DELETE", schema: "public", table: "games", filter: `id=eq.${gameId}` },
       () => {
-        alert("Oyun silindi.");
+        toast("Oyun silindi", "error");
         clearCurrentGame();
         showHome();
       }
@@ -407,15 +520,23 @@ function applyOwnerContext(game) {
 }
 
 async function startNewGame() {
-  const p1 = $("player1-input").value.trim();
-  const p2 = $("player2-input").value.trim();
+  const p1Input = $("player1-input");
+  const p2Input = $("player2-input");
+  if (!p1Input || !p2Input) return;
 
-  $("player1-input").classList.remove("error");
-  $("player2-input").classList.remove("error");
-  let valid = true;
-  if (!p1) { $("player1-input").classList.add("error"); valid = false; }
-  if (!p2) { $("player2-input").classList.add("error"); valid = false; }
-  if (!valid) return;
+  const p1 = p1Input.value.trim();
+  const p2 = p2Input.value.trim();
+
+  p1Input.classList.remove("error");
+  p2Input.classList.remove("error");
+  clearFormMessage("start-message");
+
+  if (!p1 || !p2) {
+    if (!p1) p1Input.classList.add("error");
+    if (!p2) p2Input.classList.add("error");
+    showFormMessage("start-message", "Hər iki oyunçunun adını yaz", "error");
+    return;
+  }
 
   const btn = $("start-game-btn");
   btn.disabled = true;
@@ -424,7 +545,7 @@ async function startNewGame() {
 
   try {
     const token = uuid();
-    const joinCode = await generateUniqueJoinCode(); // backend tələbi, UI-də görünmür
+    const joinCode = await generateUniqueJoinCode();
 
     const { data, error } = await sbAnon
       .from("games")
@@ -449,11 +570,19 @@ async function startNewGame() {
     ownerToken = token;
     sbClient = sbWithOwner(token);
 
-    showGame();
-    subscribeRealtime(data.id);
+    showFormMessage("start-message", "Oyun yaradıldı", "success", 1500);
+    setTimeout(() => {
+      showGame();
+      subscribeRealtime(data.id);
+      toast(`${p1} vs ${p2} — oyun başladı`, "success");
+    }, 400);
   } catch (e) {
-    console.error(e);
-    alert("Oyun yaradıla bilmədi: " + e.message);
+    console.error("startNewGame xətası:", e);
+    showFormMessage(
+      "start-message",
+      e?.message || "Oyun yaradıla bilmədi",
+      "error"
+    );
   } finally {
     btn.disabled = false;
     btn.textContent = originalText;
@@ -496,8 +625,14 @@ function clearCurrentGame() {
   cleanupRealtime();
 }
 
-function leaveCurrentGame() {
-  if (!confirm("Diqqət! Yeni oyun başlasın?\n(Cari oyun history-də qalacaq)")) return;
+async function leaveCurrentGame() {
+  const ok = await customConfirm(
+    "Yeni Oyun",
+    "Cari oyun bitir və yenisi başlayır.\nKöhnə oyun history-də qalacaq.",
+    "Yeni oyun",
+    "Davam et"
+  );
+  if (!ok) return;
   clearCurrentGame();
   showHome();
 }
@@ -507,24 +642,32 @@ function leaveCurrentGame() {
 // =====================================================================
 
 function bindEvents() {
-  $("start-game-btn").addEventListener("click", startNewGame);
-  $("new-game-btn").addEventListener("click", leaveCurrentGame);
+  const startBtn = $("start-game-btn");
+  const newBtn = $("new-game-btn");
+  const p1 = $("player1-input");
+  const p2 = $("player2-input");
 
-  $("player1-input").addEventListener("input", () =>
-    $("player1-input").classList.remove("error")
-  );
-  $("player2-input").addEventListener("input", () =>
-    $("player2-input").classList.remove("error")
-  );
+  if (startBtn) startBtn.addEventListener("click", startNewGame);
+  if (newBtn) newBtn.addEventListener("click", leaveCurrentGame);
 
-  [$("player1-input"), $("player2-input")].forEach((el) => {
-    el.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        startNewGame();
-      }
+  if (p1) {
+    p1.addEventListener("input", () => {
+      p1.classList.remove("error");
+      clearFormMessage("start-message");
     });
-  });
+    p1.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); startNewGame(); }
+    });
+  }
+  if (p2) {
+    p2.addEventListener("input", () => {
+      p2.classList.remove("error");
+      clearFormMessage("start-message");
+    });
+    p2.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); startNewGame(); }
+    });
+  }
 }
 
 async function init() {
