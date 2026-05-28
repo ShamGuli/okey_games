@@ -374,9 +374,11 @@ function renderWinner() {
   const name = w === "tie" ? "Bərabərlik" : w;
   container.innerHTML =
     '<div class="winner-box">' +
-    `<div class="winner-trophy">${trophy}</div>` +
-    '<div class="winner-label">Qalib</div>' +
-    `<div class="winner-name">${escapeHTML(name)}</div>` +
+      `<div class="winner-trophy">${trophy}</div>` +
+      '<div class="winner-text-wrap">' +
+        '<div class="winner-label">Qalib</div>' +
+        `<div class="winner-name">${escapeHTML(name)}</div>` +
+      "</div>" +
     "</div>";
 }
 
@@ -433,17 +435,19 @@ async function onScoreBlur(e) {
     return;
   }
 
-  await updateScore(round, col, value, currentValue);
-
-  // Auto-focus: col 0 → col 1 (eyni row, hələ boşdursa) — klaviatura qalır
-  // col 1 doldursa, render input-u mətnə çevirir, klaviatura təbii itir
-  if (
-    col === 0 &&
-    currentGame.status !== "finished" &&
-    currentGame.scores[round][1] === null
-  ) {
-    requestAnimationFrame(() => focusCell(round, 1));
+  // ⚡ Klaviatura saxlanması: focus next-i await-dən ƏVVƏL et (user gesture context)
+  // iOS Safari yalnız user gesture içindəki .focus() çağırışında klaviaturanı saxlayır
+  if (col === 0 && currentGame.scores[round][1] === null) {
+    const nextInput = document.querySelector(
+      `.score-input[data-round="${round}"][data-col="1"]`
+    );
+    if (nextInput) {
+      nextInput.focus();
+      try { nextInput.select(); } catch (_) {}
+    }
   }
+
+  await updateScore(round, col, value, currentValue);
 }
 
 async function updateScore(round, col, value, oldValue) {
@@ -473,6 +477,8 @@ async function updateScore(round, col, value, oldValue) {
     winner: newWinner
   };
 
+  const wasStatus = currentGame.status;
+
   const { data, error } = await sbClient
     .from("games")
     .update(updates)
@@ -487,14 +493,101 @@ async function updateScore(round, col, value, oldValue) {
   }
 
   currentGame = data || Object.assign({}, currentGame, updates);
-  renderGame();
 
-  if (newStatus === "finished" && currentGame.status === "finished") {
-    toast(
-      newWinner === "tie" ? "Bərabərlik 🤝" : `Qalib: ${newWinner} 🏆`,
-      "success",
-      3500
-    );
+  // Status keçidi (active → finished) → tam render lazımdır (winner box)
+  if (wasStatus !== currentGame.status) {
+    renderGame();
+    if (currentGame.status === "finished") {
+      toast(
+        currentGame.winner === "tie"
+          ? "Bərabərlik 🤝"
+          : `Qalib: ${currentGame.winner} 🏆`,
+        "success",
+        3500
+      );
+    }
+    return;
+  }
+
+  // Status eynidir → yalnız dəyişən cell-i partial update et
+  // (focus toxunulmadan qalır, mobil klaviatura itmir)
+  updateCellDOM(round, col);
+  updateSums();
+  renderAddRoundBtn();
+}
+
+// Sum row-u yenilə (calcSum, mənfi xallar daxil)
+function updateSums() {
+  if (!currentGame) return;
+  const sum1 = $("sum1");
+  const sum2 = $("sum2");
+  if (sum1) sum1.textContent = calcSum(currentGame.scores, 0);
+  if (sum2) sum2.textContent = calcSum(currentGame.scores, 1);
+}
+
+// Yalnız bir xananın DOM-unu yenilə (full re-render yox)
+function updateCellDOM(round, col) {
+  const input = document.querySelector(
+    `.score-input[data-round="${round}"][data-col="${col}"]`
+  );
+  if (!input) return;
+
+  const val = currentGame.scores[round][col];
+  const edited = safeEdited(currentGame);
+  const wasEdited = edited[round][col] === true;
+
+  if (val !== null && input.value !== String(val)) {
+    input.value = String(val);
+  }
+  input.classList.toggle("edited", wasEdited);
+  input.classList.toggle("end", val === -101);
+
+  const cell = input.parentElement;
+  if (!cell) return;
+
+  // Quick button: -101 olarsa silinsin, deyilsə əlavə olunsun
+  let quickBtn = cell.querySelector(".quick-end-btn");
+  if (val === -101 && quickBtn) {
+    quickBtn.remove();
+  } else if (val !== -101 && !quickBtn) {
+    const newBtn = document.createElement("button");
+    newBtn.type = "button";
+    newBtn.className = "quick-end-btn";
+    newBtn.textContent = "🏁 Biter";
+    newBtn.title = "Bu xanaya −101 yaz (OKEY qaydası — bitirənə)";
+    newBtn.addEventListener("click", () => quickEnd(round, col));
+    input.insertAdjacentElement("afterend", newBtn);
+  }
+
+  // Edit mark
+  let markEl = cell.querySelector(".edit-mark");
+  if (wasEdited && !markEl) {
+    const mark = document.createElement("span");
+    mark.className = "edit-mark";
+    mark.textContent = "✎ düzəldildi";
+    cell.appendChild(mark);
+  } else if (!wasEdited && markEl) {
+    markEl.remove();
+  }
+
+  // Sıra silmək düyməsi (rowda xal varsa)
+  const tr = cell.parentElement;
+  if (!tr) return;
+  const delCell = tr.querySelector(".delete-cell");
+  if (!delCell) return;
+  const rowHasValue =
+    currentGame.scores[round][0] !== null ||
+    currentGame.scores[round][1] !== null;
+  let delBtn = delCell.querySelector(".delete-row-btn");
+  if (rowHasValue && !delBtn) {
+    const newDelBtn = document.createElement("button");
+    newDelBtn.className = "delete-row-btn";
+    newDelBtn.title = `${round + 1}-ci əli sıfırla`;
+    newDelBtn.innerHTML = "×";
+    newDelBtn.addEventListener("click", () => deleteRow(round));
+    delCell.appendChild(newDelBtn);
+  } else if (!rowHasValue && delBtn) {
+    delBtn.remove();
   }
 }
 
@@ -632,6 +725,9 @@ function subscribeRealtime(gameId) {
       "postgres_changes",
       { event: "UPDATE", schema: "public", table: "games", filter: `id=eq.${gameId}` },
       (payload) => {
+        // Owner-in öz update-i geri gəlirsə skip (updated_at eyni)
+        // — local artıq partial DOM update edib, focus toxunulmaz qalmalıdır
+        if (currentGame && currentGame.updated_at === payload.new.updated_at) return;
         currentGame = payload.new;
         renderGame();
       }
