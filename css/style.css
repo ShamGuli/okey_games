@@ -350,7 +350,10 @@ html, body {
   color: var(--accent);
   font-size: 22px;
   font-weight: 800;
+  transition: color var(--transition);
 }
+.sum-row .score-cell.leading { color: var(--success); }
+.sum-row .score-cell.behind  { color: var(--error); }
 
 .edit-mark {
   display: block;

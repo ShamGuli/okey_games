@@ -353,11 +353,14 @@ function renderScoreTable() {
       const wrap = document.createElement("div");
       wrap.className = "action-wrap";
 
-      // × silmə (yalnız unlocked + xal varsa)
-      if (!isLocked && rowHasValue) {
+      // × silmə (xal varsa — kilidli də olsa rowu sıfırlamaq mümkündür)
+      // Kilidli rowda rəqəmləri dəyişmək yox, amma rowu tam sıfırlamaq olar
+      if (rowHasValue) {
         const delBtn = document.createElement("button");
         delBtn.className = "delete-row-btn";
-        delBtn.title = `${i + 1}-ci əli sıfırla`;
+        delBtn.title = isLocked
+          ? `${i + 1}-ci əli tam sıfırla (kilid açılır)`
+          : `${i + 1}-ci əli sıfırla`;
         delBtn.innerHTML = "×";
         delBtn.addEventListener("click", () => deleteRow(i));
         wrap.appendChild(delBtn);
@@ -380,10 +383,7 @@ function renderScoreTable() {
     tbody.appendChild(tr);
   }
 
-  const sum1 = $("sum1");
-  const sum2 = $("sum2");
-  if (sum1) sum1.textContent = calcSum(scores, 0);
-  if (sum2) sum2.textContent = calcSum(scores, 1);
+  updateSums();
 }
 
 function renderWinner() {
@@ -545,8 +545,20 @@ function updateSums() {
   if (!currentGame) return;
   const sum1 = $("sum1");
   const sum2 = $("sum2");
-  if (sum1) sum1.textContent = calcSum(currentGame.scores, 0);
-  if (sum2) sum2.textContent = calcSum(currentGame.scores, 1);
+  const s1 = calcSum(currentGame.scores, 0);
+  const s2 = calcSum(currentGame.scores, 1);
+
+  // OKEY: AZ xal = qalib (yaşıl), ÇOX xal = məğlub (qırmızı)
+  if (sum1) {
+    sum1.textContent = s1;
+    sum1.classList.toggle("leading", s1 < s2);
+    sum1.classList.toggle("behind", s1 > s2);
+  }
+  if (sum2) {
+    sum2.textContent = s2;
+    sum2.classList.toggle("leading", s2 < s1);
+    sum2.classList.toggle("behind", s2 > s1);
+  }
 }
 
 function updateCellDOM(round, col) {
@@ -615,18 +627,20 @@ function updateCellDOM(round, col) {
     return;
   }
 
-  // Delete button
+  // Delete button (kilidli rowda da görünür — sıfırlama üçün)
   let delBtn = wrap.querySelector(".delete-row-btn");
-  if (!isLocked && rowHasValue && !delBtn) {
+  if (rowHasValue && !delBtn) {
     const newDelBtn = document.createElement("button");
     newDelBtn.className = "delete-row-btn";
-    newDelBtn.title = `${round + 1}-ci əli sıfırla`;
+    newDelBtn.title = isLocked
+      ? `${round + 1}-ci əli tam sıfırla (kilid açılır)`
+      : `${round + 1}-ci əli sıfırla`;
     newDelBtn.innerHTML = "×";
     newDelBtn.addEventListener("click", () => deleteRow(round));
     const lockBtn = wrap.querySelector(".lock-row-btn");
     if (lockBtn) wrap.insertBefore(newDelBtn, lockBtn);
     else wrap.appendChild(newDelBtn);
-  } else if ((isLocked || !rowHasValue) && delBtn) {
+  } else if (!rowHasValue && delBtn) {
     delBtn.remove();
   }
 
@@ -640,15 +654,13 @@ function updateCellDOM(round, col) {
 async function deleteRow(round) {
   if (!isOwner || !ownerToken) return;
 
-  const locked = safeLocked(currentGame);
-  if (locked[round]) {
-    toast(`${round + 1}-ci əl kilidlidir, açıb yenidən cəhd et`, "error");
-    return;
-  }
+  const wasLocked = safeLocked(currentGame)[round] === true;
 
   const ok = await customConfirm(
     "Əli sil",
-    `${round + 1}-ci əldəki xallar tam silinəcək. Davam edək?`,
+    wasLocked
+      ? `${round + 1}-ci əl kilidlidir. Silsən kilid də açılacaq.\nDavam edək?`
+      : `${round + 1}-ci əldəki xallar tam silinəcək. Davam edək?`,
     "Sil",
     "Ləğv et"
   );
@@ -660,9 +672,14 @@ async function deleteRow(round) {
   const newEdited = safeEdited(currentGame).map((r) => [...r]);
   newEdited[round] = [false, false];
 
+  // Silinən sıranın kilidini də aç
+  const newLocked = safeLocked(currentGame).slice();
+  newLocked[round] = false;
+
   const updates = {
     scores: newScores,
     edited: newEdited,
+    locked: newLocked,
     status: "active",
     winner: null
   };
