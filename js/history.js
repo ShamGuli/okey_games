@@ -98,8 +98,10 @@ function openDetail(id) {
     return String(v);
   };
 
+  const visibleRows = Number(g.visible_rows) || 5;
+
   let rowsHTML = "";
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < visibleRows; i++) {
     const v1raw = g.scores[i][0];
     const v2raw = g.scores[i][1];
     const empty1 = v1raw === null ? " empty" : "";

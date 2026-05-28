@@ -12,24 +12,24 @@
 }
 
 :root {
-  --bg:           #f5f3ef;
-  --bg-gradient:  radial-gradient(ellipse at top, #faf6ee 0%, #f5f3ef 60%);
+  --bg:           #fafafa;
+  --bg-gradient:  radial-gradient(ellipse 80% 50% at 50% -10%, #ede9fe 0%, #fafafa 50%);
   --card:         #ffffff;
-  --accent:       #b8924d;
-  --accent-2:     #a07f3e;
-  --accent-soft:  #faf6ee;
-  --accent-glow:  rgba(184, 146, 77, 0.18);
+  --accent:       #7c3aed;
+  --accent-2:     #6d28d9;
+  --accent-soft:  #f5f3ff;
+  --accent-glow:  rgba(124, 58, 237, 0.18);
   --text:         #1a1a1a;
-  --muted:        #6b6b6b;
-  --border:       #e8e2d4;
-  --border-soft:  #f0ead8;
-  --error:        #c0392b;
-  --error-soft:   #fef0ef;
-  --success:      #2d8659;
-  --success-soft: #ebf5ef;
+  --muted:        #6b7280;
+  --border:       #e5e7eb;
+  --border-soft:  #f3f4f6;
+  --error:        #dc2626;
+  --error-soft:   #fef2f2;
+  --success:      #16a34a;
+  --success-soft: #f0fdf4;
   --shadow-sm:    0 1px 2px rgba(0,0,0,0.04);
-  --shadow:       0 1px 3px rgba(184, 146, 77, 0.06), 0 2px 8px rgba(0,0,0,0.04);
-  --shadow-lg:    0 10px 25px rgba(0, 0, 0, 0.08), 0 4px 10px rgba(184, 146, 77, 0.08);
+  --shadow:       0 1px 3px rgba(124, 58, 237, 0.06), 0 2px 8px rgba(0,0,0,0.04);
+  --shadow-lg:    0 10px 25px rgba(0, 0, 0, 0.08), 0 4px 10px rgba(124, 58, 237, 0.10);
   --radius:       14px;
   --radius-sm:    10px;
   --transition:   180ms cubic-bezier(0.32, 0.72, 0, 1);
@@ -405,6 +405,40 @@ html, body {
   font-weight: 800;
   letter-spacing: 0.3px;
   white-space: nowrap;
+}
+
+/* "+ Yeni Əl Əlavə Et" — dashed dinamik düymə */
+.add-round-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0 0 16px;
+  padding: 16px;
+  background: transparent;
+  border: 2px dashed var(--accent);
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  border-radius: var(--radius);
+  cursor: pointer;
+  letter-spacing: 0.2px;
+  transition: background var(--transition), border-color var(--transition), transform var(--transition);
+}
+.add-round-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+.add-round-btn:active:not(:disabled) { transform: scale(0.99); }
+.add-round-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.add-round-btn .plus {
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 800;
 }
 
 .delete-cell { width: 40px; }

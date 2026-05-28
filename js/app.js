@@ -225,7 +225,33 @@ function renderGame() {
   if (p1Header) p1Header.textContent = currentGame.player1;
   if (p2Header) p2Header.textContent = currentGame.player2;
   renderScoreTable();
+  renderAddRoundBtn();
   renderWinner();
+}
+
+function renderAddRoundBtn() {
+  const btn = $("add-round-btn");
+  if (!btn || !currentGame) return;
+
+  const visibleRows = Number(currentGame.visible_rows) || 1;
+
+  // Viewer / max 5 / finished — gizlət
+  if (!isOwner || visibleRows >= 5 || currentGame.status === "finished") {
+    btn.style.display = "none";
+    return;
+  }
+
+  btn.style.display = "";
+
+  // Disabled — cari rowlarda boş xana varsa
+  let allFull = true;
+  for (let r = 0; r < visibleRows; r++) {
+    if (currentGame.scores[r][0] === null || currentGame.scores[r][1] === null) {
+      allFull = false;
+      break;
+    }
+  }
+  btn.disabled = !allFull;
 }
 
 function renderScoreTable() {
@@ -235,8 +261,9 @@ function renderScoreTable() {
 
   const scores = currentGame.scores;
   const edited = safeEdited(currentGame);
+  const visibleRows = Number(currentGame.visible_rows) || 1;
 
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < visibleRows; i++) {
     const tr = document.createElement("tr");
     const rowHasValue = scores[i][0] !== null || scores[i][1] !== null;
 
@@ -277,8 +304,8 @@ function renderScoreTable() {
           const quickBtn = document.createElement("button");
           quickBtn.type = "button";
           quickBtn.className = "quick-end-btn";
-          quickBtn.textContent = "🏁 Bitdi";
-          quickBtn.title = "Bu xanaya −101 yaz (OKEY qaydası — bitənə)";
+          quickBtn.textContent = "🏁 Biter";
+          quickBtn.title = "Bu xanaya −101 yaz (OKEY qaydası — bitirənə)";
           quickBtn.addEventListener("click", () => quickEnd(i, col));
           td.appendChild(quickBtn);
         }
@@ -430,9 +457,11 @@ async function updateScore(round, col, value, oldValue) {
     newEdited[round][col] = true;
   }
 
-  let newStatus = currentGame.status;
-  let newWinner = currentGame.winner;
-  if (isComplete(newScores)) {
+  const visible = Number(currentGame.visible_rows) || 1;
+  let newStatus = "active";
+  let newWinner = null;
+  // Avtomatik bitir: 5 row açıqdır və hamı dolu
+  if (visible === 5 && isComplete(newScores)) {
     newStatus = "finished";
     newWinner = calcWinner(newScores, currentGame.player1, currentGame.player2);
   }
@@ -509,7 +538,47 @@ async function deleteRow(round) {
   toast(`${round + 1}-ci əl silindi`, "success");
 }
 
-// "🏁 Bitdi" düyməsi — xanaya −101 yazır (OKEY qaydası)
+// "+ Yeni Əl Əlavə Et" — visible_rows-u 1 artır (maks 5)
+async function addRound() {
+  if (!isOwner || !ownerToken) return;
+  const visible = Number(currentGame.visible_rows) || 1;
+  if (visible >= 5) return;
+
+  // Validation: hazırkı bütün rowlar tam dolu olmalıdır
+  for (let r = 0; r < visible; r++) {
+    if (currentGame.scores[r][0] === null || currentGame.scores[r][1] === null) {
+      const col = currentGame.scores[r][0] === null ? 0 : 1;
+      const playerName = col === 0 ? currentGame.player1 : currentGame.player2;
+      toast(
+        `${r + 1}-ci əldə "${playerName}" xanası boşdur — əvvəl onu doldur`,
+        "error",
+        3500
+      );
+      requestAnimationFrame(() => focusCell(r, col));
+      return;
+    }
+  }
+
+  const newVisible = visible + 1;
+  const { data, error } = await sbClient
+    .from("games")
+    .update({ visible_rows: newVisible })
+    .eq("id", currentGame.id)
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    toast("Yeni əl əlavə edilə bilmədi: " + error.message, "error", 4000);
+    return;
+  }
+
+  currentGame = data || Object.assign({}, currentGame, { visible_rows: newVisible });
+  renderGame();
+  // Yeni row birinci xanasına fokus
+  requestAnimationFrame(() => focusCell(newVisible - 1, 0));
+}
+
+// "🏁 Biter" düyməsi — xanaya −101 yazır (OKEY qaydası)
 async function quickEnd(round, col) {
   if (!isOwner || !ownerToken) return;
   const currentValue = currentGame.scores[round][col];
@@ -645,7 +714,8 @@ async function startNewGame() {
         player1: p1,
         player2: p2,
         scores: emptyScores(),
-        edited: emptyEdited()
+        edited: emptyEdited(),
+        visible_rows: 1
       })
       .select()
       .single();
@@ -739,6 +809,9 @@ function bindEvents() {
 
   if (startBtn) startBtn.addEventListener("click", startNewGame);
   if (newBtn) newBtn.addEventListener("click", leaveCurrentGame);
+
+  const addBtn = $("add-round-btn");
+  if (addBtn) addBtn.addEventListener("click", addRound);
 
   if (p1) {
     p1.addEventListener("input", () => {
