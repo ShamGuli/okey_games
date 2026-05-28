@@ -442,7 +442,50 @@ html, body {
   font-weight: 800;
 }
 
-.delete-cell { width: 40px; }
+.action-cell { width: 56px; }
+.action-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 🔓 / 🔒 sıra lock toggle */
+.lock-row-btn {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-family: inherit;
+  transition: background var(--transition), opacity var(--transition), transform var(--transition);
+}
+.lock-row-btn:hover:not(:disabled) { background: var(--accent-soft); }
+.lock-row-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.lock-row-btn:active:not(:disabled) { transform: scale(0.9); }
+
+/* Row tam dolu amma kilidlənməyib → qırmızı kənar siqnalı */
+tbody tr.row-needs-lock td {
+  background: rgba(220, 38, 38, 0.04);
+}
+tbody tr.row-needs-lock td:first-child {
+  box-shadow: inset 3px 0 0 var(--error);
+}
+tbody tr.row-needs-lock td:last-child {
+  box-shadow: inset -3px 0 0 var(--error);
+}
+tbody tr.row-needs-lock .score-input {
+  border-color: var(--error);
+}
+tbody tr.row-needs-lock .lock-row-btn {
+  background: var(--error-soft);
+}
+tbody tr.row-locked td {
+  background: var(--accent-soft);
+  opacity: 0.85;
+}
 .delete-row-btn {
   background: transparent;
   border: none;

@@ -1,7 +1,6 @@
 // =====================================================================
 // OKEY — Əsas oyun məntiqi
-// Yalnız owner xal yazır. Xanalar həmişə edit oluna bilər, edit
-// edildikdə altında "✎ düzəldildi" qeydi qalır.
+// Owner xal yazır, hər row-u kilidləyir. Lock-dan sonra edit/sil yox.
 // =====================================================================
 
 // ----- State -----
@@ -18,7 +17,7 @@ const LS_OWNER_PREFIX = "okey_owner_";
 const $ = (id) => document.getElementById(id);
 
 // =====================================================================
-// UI HELPERS — toast, form-message, custom confirm
+// UI HELPERS
 // =====================================================================
 
 function escapeHTML(s) {
@@ -27,7 +26,6 @@ function escapeHTML(s) {
   }[c]));
 }
 
-// Button altında inline mesaj (qırmızı/yaşıl)
 function showFormMessage(elementId, message, type, duration = 4000) {
   const el = $(elementId);
   if (!el) return;
@@ -49,7 +47,6 @@ function clearFormMessage(elementId) {
   el.textContent = "";
 }
 
-// Toast bildiriş (yuxarıdan)
 function toast(message, type = "info", duration = 2500) {
   const container = $("toast-container");
   if (!container) {
@@ -69,7 +66,6 @@ function toast(message, type = "info", duration = 2500) {
   }, duration);
 }
 
-// Native confirm əvəzinə custom modal
 function customConfirm(title, message, okText = "Davam et", cancelText = "Ləğv et") {
   return new Promise((resolve) => {
     const modal = $("confirm-modal");
@@ -79,7 +75,6 @@ function customConfirm(title, message, okText = "Davam et", cancelText = "Ləğv
     const cancelBtn = $("confirm-cancel");
 
     if (!modal || !okBtn || !cancelBtn) {
-      // Fallback — modal yoxdursa native istifadə et
       resolve(window.confirm(`${title}\n\n${message}`));
       return;
     }
@@ -120,7 +115,6 @@ function customConfirm(title, message, okText = "Davam et", cancelText = "Ləğv
 // UTILITIES
 // =====================================================================
 
-// Əvvəlki row-larda ilk boş xananı tap (yoxsa null)
 function findFirstIncompleteCell(scores, beforeRound) {
   for (let r = 0; r < beforeRound; r++) {
     if (scores[r][0] === null) return { round: r, col: 0 };
@@ -129,7 +123,6 @@ function findFirstIncompleteCell(scores, beforeRound) {
   return null;
 }
 
-// Müəyyən xanaya fokus + select
 function focusCell(round, col) {
   const input = document.querySelector(
     `.score-input[data-round="${round}"][data-col="${col}"]`
@@ -153,6 +146,9 @@ function emptyScores() {
 function emptyEdited() {
   return [[false, false], [false, false], [false, false], [false, false], [false, false]];
 }
+function emptyLocked() {
+  return [false, false, false, false, false];
+}
 
 function calcSum(scores, col) {
   return scores.reduce((s, row) => s + (Number(row[col]) || 0), 0);
@@ -170,7 +166,6 @@ function calcWinner(scores, p1, p2) {
   return "tie";
 }
 
-// Backend üçün unikal join_code (UI-də görünmür, schema tələbi)
 async function generateUniqueJoinCode() {
   for (let i = 0; i < 25; i++) {
     const code = String(Math.floor(1000 + Math.random() * 9000));
@@ -187,6 +182,11 @@ async function generateUniqueJoinCode() {
 function safeEdited(game) {
   if (Array.isArray(game?.edited) && game.edited.length === 5) return game.edited;
   return emptyEdited();
+}
+
+function safeLocked(game) {
+  if (Array.isArray(game?.locked) && game.locked.length === 5) return game.locked;
+  return emptyLocked();
 }
 
 // =====================================================================
@@ -235,7 +235,6 @@ function renderAddRoundBtn() {
 
   const visibleRows = Number(currentGame.visible_rows) || 1;
 
-  // Viewer / max 5 / finished — gizlət
   if (!isOwner || visibleRows >= 5 || currentGame.status === "finished") {
     btn.style.display = "none";
     return;
@@ -243,15 +242,13 @@ function renderAddRoundBtn() {
 
   btn.style.display = "";
 
-  // Disabled — cari rowlarda boş xana varsa
-  let allFull = true;
+  // Bütün rowlar kilidlənmiş olmalıdır
+  const locked = safeLocked(currentGame);
+  let allLocked = true;
   for (let r = 0; r < visibleRows; r++) {
-    if (currentGame.scores[r][0] === null || currentGame.scores[r][1] === null) {
-      allFull = false;
-      break;
-    }
+    if (!locked[r]) { allLocked = false; break; }
   }
-  btn.disabled = !allFull;
+  btn.disabled = !allLocked;
 }
 
 function renderScoreTable() {
@@ -261,11 +258,17 @@ function renderScoreTable() {
 
   const scores = currentGame.scores;
   const edited = safeEdited(currentGame);
+  const locked = safeLocked(currentGame);
   const visibleRows = Number(currentGame.visible_rows) || 1;
 
   for (let i = 0; i < visibleRows; i++) {
     const tr = document.createElement("tr");
     const rowHasValue = scores[i][0] !== null || scores[i][1] !== null;
+    const rowIsFull = scores[i][0] !== null && scores[i][1] !== null;
+    const isLocked = locked[i] === true;
+
+    if (isOwner && rowIsFull && !isLocked) tr.classList.add("row-needs-lock");
+    if (isLocked) tr.classList.add("row-locked");
 
     // Raund nömrəsi
     const tdLabel = document.createElement("td");
@@ -279,7 +282,8 @@ function renderScoreTable() {
       const val = scores[i][col];
       const wasEdited = edited[i][col] === true;
 
-      if (isOwner) {
+      if (isOwner && !isLocked) {
+        // Edit mode
         const input = document.createElement("input");
         input.type = "text";
         input.inputMode = "numeric";
@@ -298,13 +302,12 @@ function renderScoreTable() {
         input.addEventListener("blur", onScoreBlur);
         td.appendChild(input);
 
-        // "🏁 Bitdi" quick düyməsi → bu xanaya −101 yazır
-        // (klavyatura mənfi qəbul etmir, ona görə manual yazmaq əvəzinə)
+        // "🏁 Bitər" quick düyməsi → −101
         if (val !== -101) {
           const quickBtn = document.createElement("button");
           quickBtn.type = "button";
           quickBtn.className = "quick-end-btn";
-          quickBtn.textContent = "🏁 Biter";
+          quickBtn.textContent = "🏁 Bitər";
           quickBtn.title = "Bu xanaya −101 yaz (OKEY qaydası — bitirənə)";
           quickBtn.addEventListener("click", () => quickEnd(i, col));
           td.appendChild(quickBtn);
@@ -317,6 +320,7 @@ function renderScoreTable() {
           td.appendChild(mark);
         }
       } else {
+        // Read-only (viewer və ya locked)
         if (val !== null) {
           td.className = "score-cell";
           const text = document.createElement("span");
@@ -341,18 +345,38 @@ function renderScoreTable() {
       tr.appendChild(td);
     }
 
-    const tdDel = document.createElement("td");
-    tdDel.className = "delete-cell";
-    if (isOwner && rowHasValue) {
-      const btn = document.createElement("button");
-      btn.className = "delete-row-btn";
-      btn.title = `${i + 1}-ci əli sıfırla`;
-      btn.innerHTML = "×";
-      btn.addEventListener("click", () => deleteRow(i));
-      tdDel.appendChild(btn);
-    }
-    tr.appendChild(tdDel);
+    // Action cell — × silmə + 🔓/🔒 lock toggle
+    const tdAction = document.createElement("td");
+    tdAction.className = "action-cell";
 
+    if (isOwner) {
+      const wrap = document.createElement("div");
+      wrap.className = "action-wrap";
+
+      // × silmə (yalnız unlocked + xal varsa)
+      if (!isLocked && rowHasValue) {
+        const delBtn = document.createElement("button");
+        delBtn.className = "delete-row-btn";
+        delBtn.title = `${i + 1}-ci əli sıfırla`;
+        delBtn.innerHTML = "×";
+        delBtn.addEventListener("click", () => deleteRow(i));
+        wrap.appendChild(delBtn);
+      }
+
+      // Lock toggle (həmişə görünür)
+      const lockBtn = document.createElement("button");
+      lockBtn.type = "button";
+      lockBtn.className = "lock-row-btn";
+      lockBtn.disabled = !isLocked && !rowIsFull;
+      lockBtn.textContent = isLocked ? "🔒" : "🔓";
+      lockBtn.title = isLocked ? "Sıranı aç" : "Sıranı kilidlə";
+      lockBtn.addEventListener("click", () => lockRow(i));
+      wrap.appendChild(lockBtn);
+
+      tdAction.appendChild(wrap);
+    }
+
+    tr.appendChild(tdAction);
     tbody.appendChild(tr);
   }
 
@@ -404,7 +428,6 @@ async function onScoreBlur(e) {
   const currentValue = currentGame.scores[round][col];
   const raw = input.value.trim();
 
-  // Boş → mövcud dəyəri qoru
   if (!raw) {
     if (currentValue !== null) input.value = String(currentValue);
     return;
@@ -416,7 +439,6 @@ async function onScoreBlur(e) {
     return;
   }
 
-  // Dəyər dəyişməyibsə heç nə etmə
   if (value === currentValue) return;
 
   // Validation: əvvəlki row-lar tam dolu olmalıdır
@@ -435,8 +457,7 @@ async function onScoreBlur(e) {
     return;
   }
 
-  // ⚡ Klaviatura saxlanması: focus next-i await-dən ƏVVƏL et (user gesture context)
-  // iOS Safari yalnız user gesture içindəki .focus() çağırışında klaviaturanı saxlayır
+  // ⚡ Klaviatura saxlanması: focus next-i await-dən əvvəl et
   if (col === 0 && currentGame.scores[round][1] === null) {
     const nextInput = document.querySelector(
       `.score-input[data-round="${round}"][data-col="1"]`
@@ -452,6 +473,12 @@ async function onScoreBlur(e) {
 
 async function updateScore(round, col, value, oldValue) {
   if (!isOwner || !ownerToken) return;
+
+  const locked = safeLocked(currentGame);
+  if (locked[round]) {
+    toast(`${round + 1}-ci əl kilidlidir, açıb yenidən cəhd et`, "error");
+    return;
+  }
 
   const newScores = currentGame.scores.map((r) => [...r]);
   newScores[round][col] = value;
@@ -494,7 +521,6 @@ async function updateScore(round, col, value, oldValue) {
 
   currentGame = data || Object.assign({}, currentGame, updates);
 
-  // Status keçidi (active → finished) → tam render lazımdır (winner box)
   if (wasStatus !== currentGame.status) {
     renderGame();
     if (currentGame.status === "finished") {
@@ -510,13 +536,11 @@ async function updateScore(round, col, value, oldValue) {
   }
 
   // Status eynidir → yalnız dəyişən cell-i partial update et
-  // (focus toxunulmadan qalır, mobil klaviatura itmir)
   updateCellDOM(round, col);
   updateSums();
   renderAddRoundBtn();
 }
 
-// Sum row-u yenilə (calcSum, mənfi xallar daxil)
 function updateSums() {
   if (!currentGame) return;
   const sum1 = $("sum1");
@@ -525,7 +549,6 @@ function updateSums() {
   if (sum2) sum2.textContent = calcSum(currentGame.scores, 1);
 }
 
-// Yalnız bir xananın DOM-unu yenilə (full re-render yox)
 function updateCellDOM(round, col) {
   const input = document.querySelector(
     `.score-input[data-round="${round}"][data-col="${col}"]`
@@ -545,7 +568,7 @@ function updateCellDOM(round, col) {
   const cell = input.parentElement;
   if (!cell) return;
 
-  // Quick button: -101 olarsa silinsin, deyilsə əlavə olunsun
+  // Quick button: -101 olduqda silinir
   let quickBtn = cell.querySelector(".quick-end-btn");
   if (val === -101 && quickBtn) {
     quickBtn.remove();
@@ -553,7 +576,7 @@ function updateCellDOM(round, col) {
     const newBtn = document.createElement("button");
     newBtn.type = "button";
     newBtn.className = "quick-end-btn";
-    newBtn.textContent = "🏁 Biter";
+    newBtn.textContent = "🏁 Bitər";
     newBtn.title = "Bu xanaya −101 yaz (OKEY qaydası — bitirənə)";
     newBtn.addEventListener("click", () => quickEnd(round, col));
     input.insertAdjacentElement("afterend", newBtn);
@@ -570,29 +593,59 @@ function updateCellDOM(round, col) {
     markEl.remove();
   }
 
-  // Sıra silmək düyməsi (rowda xal varsa)
+  // Row state update + action wrap
   const tr = cell.parentElement;
   if (!tr) return;
-  const delCell = tr.querySelector(".delete-cell");
-  if (!delCell) return;
+
   const rowHasValue =
     currentGame.scores[round][0] !== null ||
     currentGame.scores[round][1] !== null;
-  let delBtn = delCell.querySelector(".delete-row-btn");
-  if (rowHasValue && !delBtn) {
+  const rowIsFull =
+    currentGame.scores[round][0] !== null &&
+    currentGame.scores[round][1] !== null;
+  const locked = safeLocked(currentGame);
+  const isLocked = locked[round] === true;
+
+  tr.classList.toggle("row-needs-lock", isOwner && rowIsFull && !isLocked);
+
+  const actionCell = tr.querySelector(".action-cell");
+  const wrap = actionCell?.querySelector(".action-wrap");
+  if (!wrap) {
+    renderAddRoundBtn();
+    return;
+  }
+
+  // Delete button
+  let delBtn = wrap.querySelector(".delete-row-btn");
+  if (!isLocked && rowHasValue && !delBtn) {
     const newDelBtn = document.createElement("button");
     newDelBtn.className = "delete-row-btn";
     newDelBtn.title = `${round + 1}-ci əli sıfırla`;
     newDelBtn.innerHTML = "×";
     newDelBtn.addEventListener("click", () => deleteRow(round));
-    delCell.appendChild(newDelBtn);
-  } else if (!rowHasValue && delBtn) {
+    const lockBtn = wrap.querySelector(".lock-row-btn");
+    if (lockBtn) wrap.insertBefore(newDelBtn, lockBtn);
+    else wrap.appendChild(newDelBtn);
+  } else if ((isLocked || !rowHasValue) && delBtn) {
     delBtn.remove();
+  }
+
+  // Lock button — disabled state
+  const lockBtn = wrap.querySelector(".lock-row-btn");
+  if (lockBtn) {
+    lockBtn.disabled = !isLocked && !rowIsFull;
   }
 }
 
 async function deleteRow(round) {
   if (!isOwner || !ownerToken) return;
+
+  const locked = safeLocked(currentGame);
+  if (locked[round]) {
+    toast(`${round + 1}-ci əl kilidlidir, açıb yenidən cəhd et`, "error");
+    return;
+  }
+
   const ok = await customConfirm(
     "Əli sil",
     `${round + 1}-ci əldəki xallar tam silinəcək. Davam edək?`,
@@ -632,22 +685,35 @@ async function deleteRow(round) {
 }
 
 // "+ Yeni Əl Əlavə Et" — visible_rows-u 1 artır (maks 5)
+// Bütün rowlar kilidlənmiş olmalıdır
 async function addRound() {
   if (!isOwner || !ownerToken) return;
   const visible = Number(currentGame.visible_rows) || 1;
   if (visible >= 5) return;
 
-  // Validation: hazırkı bütün rowlar tam dolu olmalıdır
+  const locked = safeLocked(currentGame);
+
   for (let r = 0; r < visible; r++) {
-    if (currentGame.scores[r][0] === null || currentGame.scores[r][1] === null) {
-      const col = currentGame.scores[r][0] === null ? 0 : 1;
-      const playerName = col === 0 ? currentGame.player1 : currentGame.player2;
-      toast(
-        `${r + 1}-ci əldə "${playerName}" xanası boşdur — əvvəl onu doldur`,
-        "error",
-        3500
-      );
-      requestAnimationFrame(() => focusCell(r, col));
+    if (!locked[r]) {
+      const rowIsFull =
+        currentGame.scores[r][0] !== null &&
+        currentGame.scores[r][1] !== null;
+      if (!rowIsFull) {
+        const col = currentGame.scores[r][0] === null ? 0 : 1;
+        const playerName = col === 0 ? currentGame.player1 : currentGame.player2;
+        toast(
+          `${r + 1}-ci əldə "${playerName}" xanası boşdur — əvvəl onu doldur`,
+          "error",
+          3500
+        );
+        requestAnimationFrame(() => focusCell(r, col));
+      } else {
+        toast(
+          `${r + 1}-ci əli kilidlə (🔒), sonra yenisini yarat`,
+          "error",
+          3500
+        );
+      }
       return;
     }
   }
@@ -667,17 +733,19 @@ async function addRound() {
 
   currentGame = data || Object.assign({}, currentGame, { visible_rows: newVisible });
   renderGame();
-  // Yeni row birinci xanasına fokus
   requestAnimationFrame(() => focusCell(newVisible - 1, 0));
 }
 
-// "🏁 Biter" düyməsi — xanaya −101 yazır (OKEY qaydası)
+// "🏁 Bitər" — xanaya −101 yazır (OKEY qaydası)
 async function quickEnd(round, col) {
   if (!isOwner || !ownerToken) return;
+
+  const locked = safeLocked(currentGame);
+  if (locked[round]) return;
+
   const currentValue = currentGame.scores[round][col];
   if (currentValue === -101) return;
 
-  // Validation: əvvəlki row-lar tam dolu olmalıdır
   const incomplete = findFirstIncompleteCell(currentGame.scores, round);
   if (incomplete) {
     const playerName = incomplete.col === 0
@@ -693,6 +761,52 @@ async function quickEnd(round, col) {
   }
 
   await updateScore(round, col, -101, currentValue);
+}
+
+// 🔓 / 🔒 — Sıranı lock / unlock et
+async function lockRow(round) {
+  if (!isOwner || !ownerToken) return;
+
+  const lockedArr = safeLocked(currentGame).slice();
+  const isLocked = lockedArr[round] === true;
+
+  if (!isLocked) {
+    // Lock — row tam dolu olmalıdır
+    if (
+      currentGame.scores[round][0] === null ||
+      currentGame.scores[round][1] === null
+    ) {
+      toast(`${round + 1}-ci əldə boş xana var — əvvəl doldur`, "error", 3500);
+      return;
+    }
+  }
+
+  lockedArr[round] = !isLocked;
+
+  const { data, error } = await sbClient
+    .from("games")
+    .update({ locked: lockedArr })
+    .eq("id", currentGame.id)
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    toast(
+      (isLocked ? "Açıla bilmədi: " : "Kilidlənə bilmədi: ") + error.message,
+      "error",
+      4000
+    );
+    return;
+  }
+
+  currentGame = data || Object.assign({}, currentGame, { locked: lockedArr });
+  renderGame();
+  toast(
+    isLocked
+      ? `${round + 1}-ci əl açıldı 🔓`
+      : `${round + 1}-ci əl kilidləndi 🔒`,
+    "success"
+  );
 }
 
 // =====================================================================
@@ -726,7 +840,6 @@ function subscribeRealtime(gameId) {
       { event: "UPDATE", schema: "public", table: "games", filter: `id=eq.${gameId}` },
       (payload) => {
         // Owner-in öz update-i geri gəlirsə skip (updated_at eyni)
-        // — local artıq partial DOM update edib, focus toxunulmaz qalmalıdır
         if (currentGame && currentGame.updated_at === payload.new.updated_at) return;
         currentGame = payload.new;
         renderGame();
@@ -811,6 +924,7 @@ async function startNewGame() {
         player2: p2,
         scores: emptyScores(),
         edited: emptyEdited(),
+        locked: emptyLocked(),
         visible_rows: 1
       })
       .select()
