@@ -1,20 +1,20 @@
 // =====================================================================
 // OKEY — Əsas oyun məntiqi
-// Faza 2-4: oyun yaratma + xal cədvəli + qoşulma + canlı (Realtime)
+// Yalnız owner xal yazır (qoşulma UI yoxdur).
+// Xanalar həmişə edit oluna bilər; edit edildikdə "düzəldildi" qeydi qalır.
 // =====================================================================
 
 // ----- State -----
-let currentGame = null;        // hazırkı oyunun sətri
-let isOwner = false;           // bu cihaz oyunun sahibi olub-olmadığını
-let ownerToken = null;         // sahib token-i (varsa)
-let sbClient = sbAnon;         // UPDATE-lər üçün istifadə olunan client
-let realtimeChannel = null;    // hazırkı abunəlik
+let currentGame = null;
+let isOwner = false;
+let ownerToken = null;
+let sbClient = sbAnon;
+let realtimeChannel = null;
 
 // ----- LocalStorage açarları -----
 const LS_CURRENT_GAME = "okey_current_game_id";
-const LS_OWNER_PREFIX = "okey_owner_"; // + gameId
+const LS_OWNER_PREFIX = "okey_owner_";
 
-// ----- DOM helper -----
 const $ = (id) => document.getElementById(id);
 
 // =====================================================================
@@ -23,7 +23,6 @@ const $ = (id) => document.getElementById(id);
 
 function uuid() {
   if (window.crypto?.randomUUID) return crypto.randomUUID();
-  // Köhnə brauzerlər üçün fallback
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
     return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
@@ -33,16 +32,18 @@ function uuid() {
 function emptyScores() {
   return [[null, null], [null, null], [null, null], [null, null], [null, null]];
 }
+function emptyEdited() {
+  return [[false, false], [false, false], [false, false], [false, false], [false, false]];
+}
 
 function calcSum(scores, col) {
   return scores.reduce((s, row) => s + (Number(row[col]) || 0), 0);
 }
-
 function isComplete(scores) {
   return scores.every((row) => row[0] !== null && row[1] !== null);
 }
 
-// OKEY qaydası: AZ xal olan qalibdir
+// OKEY qaydası: AZ xal qalibdir
 function calcWinner(scores, p1, p2) {
   const s1 = calcSum(scores, 0);
   const s2 = calcSum(scores, 1);
@@ -53,16 +54,12 @@ function calcWinner(scores, p1, p2) {
 
 function escapeHTML(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   }[c]));
 }
 
+// Backend-də saxlanılır, UI-də görünmür (cədvəlin unique not null sütunu)
 async function generateUniqueJoinCode() {
-  // 4 rəqəmli (1000-9999) unikal kod, collision yoxlaması ilə
   for (let i = 0; i < 25; i++) {
     const code = String(Math.floor(1000 + Math.random() * 9000));
     const { data, error } = await sbAnon
@@ -72,7 +69,13 @@ async function generateUniqueJoinCode() {
       .maybeSingle();
     if (!error && !data) return code;
   }
-  throw new Error("Kod yaradıla bilmədi (collision). Yenidən cəhd et.");
+  throw new Error("Kod yaradıla bilmədi. Yenidən cəhd et.");
+}
+
+// edited sahəsi köhnə oyunlarda olmaya bilər — təhlükəsiz oxu
+function safeEdited(game) {
+  if (Array.isArray(game?.edited) && game.edited.length === 5) return game.edited;
+  return emptyEdited();
 }
 
 // =====================================================================
@@ -84,8 +87,6 @@ function showHome() {
   $("game-view").style.display = "none";
   $("player1-input").value = "";
   $("player2-input").value = "";
-  $("join-code-input").value = "";
-  $("join-message").innerHTML = "";
   $("player1-input").classList.remove("error");
   $("player2-input").classList.remove("error");
   cleanupRealtime();
@@ -103,7 +104,6 @@ function showGame() {
 
 function renderGame() {
   if (!currentGame) return;
-  $("join-code-display").textContent = currentGame.join_code;
   $("player1-header").textContent = currentGame.player1;
   $("player2-header").textContent = currentGame.player2;
   renderScoreTable();
@@ -115,6 +115,7 @@ function renderScoreTable() {
   tbody.innerHTML = "";
 
   const scores = currentGame.scores;
+  const edited = safeEdited(currentGame);
 
   for (let i = 0; i < 5; i++) {
     const tr = document.createElement("tr");
@@ -130,30 +131,48 @@ function renderScoreTable() {
     for (let col = 0; col < 2; col++) {
       const td = document.createElement("td");
       const val = scores[i][col];
+      const wasEdited = edited[i][col] === true;
 
-      if (val !== null) {
-        // Doldurulmuş — kilidli mətn
-        td.className = "score-cell";
-        td.textContent = val;
-      } else if (isOwner) {
-        // Owner — input
+      if (isOwner) {
+        // Owner — həmişə redaktə oluna bilər
         const input = document.createElement("input");
         input.type = "text";
         input.inputMode = "numeric";
         input.pattern = "[0-9]*";
         input.autocomplete = "off";
-        input.className = "score-input";
+        input.className = "score-input" + (wasEdited ? " edited" : "");
         input.maxLength = 4;
         input.dataset.round = i;
         input.dataset.col = col;
+        if (val !== null) input.value = String(val);
         input.addEventListener("input", onScoreInput);
         input.addEventListener("keydown", onScoreKeydown);
         input.addEventListener("blur", onScoreBlur);
         td.appendChild(input);
+
+        if (wasEdited) {
+          const mark = document.createElement("span");
+          mark.className = "edit-mark";
+          mark.textContent = "✎ düzəldildi";
+          td.appendChild(mark);
+        }
       } else {
-        // Qoşulan — boş xanada tire göstər
-        td.className = "score-cell empty";
-        td.textContent = "—";
+        // Read-only baxış
+        if (val !== null) {
+          td.className = "score-cell";
+          const text = document.createElement("span");
+          text.textContent = val;
+          td.appendChild(text);
+          if (wasEdited) {
+            const mark = document.createElement("span");
+            mark.className = "edit-mark";
+            mark.textContent = "✎ düzəldildi";
+            td.appendChild(mark);
+          }
+        } else {
+          td.className = "score-cell empty";
+          td.textContent = "—";
+        }
       }
       tr.appendChild(td);
     }
@@ -201,7 +220,6 @@ function renderWinner() {
 // =====================================================================
 
 function onScoreInput(e) {
-  // Yalnız rəqəm, max 4 simvol
   e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4);
 }
 
@@ -214,35 +232,54 @@ function onScoreKeydown(e) {
 
 async function onScoreBlur(e) {
   const input = e.target;
+  const round = Number(input.dataset.round);
+  const col = Number(input.dataset.col);
+  const currentValue = currentGame.scores[round][col];
   const raw = input.value.trim();
-  if (!raw) return; // boş qalıbsa heç nə etmə
 
-  const value = parseInt(raw, 10);
-  if (isNaN(value) || value < 0) {
-    input.value = "";
+  // Boş → mövcud dəyəri qoru
+  if (!raw) {
+    if (currentValue !== null) input.value = String(currentValue);
     return;
   }
 
-  const round = Number(input.dataset.round);
-  const col = Number(input.dataset.col);
-  await updateScore(round, col, value);
+  const value = parseInt(raw, 10);
+  if (isNaN(value) || value < 0) {
+    input.value = currentValue !== null ? String(currentValue) : "";
+    return;
+  }
+
+  // Dəyər dəyişməyibsə heç nə etmə
+  if (value === currentValue) return;
+
+  await updateScore(round, col, value, currentValue);
 }
 
-async function updateScore(round, col, value) {
+async function updateScore(round, col, value, oldValue) {
   if (!isOwner || !ownerToken) return;
 
   const newScores = currentGame.scores.map((r) => [...r]);
   newScores[round][col] = value;
 
+  const newEdited = safeEdited(currentGame).map((r) => [...r]);
+  // Yalnız boş olmayan xananın dəyişdirilməsi "edit" sayılır
+  if (oldValue !== null && oldValue !== value) {
+    newEdited[round][col] = true;
+  }
+
   let newStatus = currentGame.status;
   let newWinner = currentGame.winner;
-
   if (isComplete(newScores)) {
     newStatus = "finished";
     newWinner = calcWinner(newScores, currentGame.player1, currentGame.player2);
   }
 
-  const updates = { scores: newScores, status: newStatus, winner: newWinner };
+  const updates = {
+    scores: newScores,
+    edited: newEdited,
+    status: newStatus,
+    winner: newWinner
+  };
 
   const { data, error } = await sbClient
     .from("games")
@@ -257,9 +294,7 @@ async function updateScore(round, col, value) {
     return;
   }
 
-  if (data) currentGame = data;
-  else Object.assign(currentGame, updates);
-
+  currentGame = data || Object.assign({}, currentGame, updates);
   renderGame();
 }
 
@@ -270,8 +305,16 @@ async function deleteRow(round) {
   const newScores = currentGame.scores.map((r) => [...r]);
   newScores[round] = [null, null];
 
-  // Silmə həm də finished statusunu açmalıdır
-  const updates = { scores: newScores, status: "active", winner: null };
+  // Silinən sətirdə edit flag-ları da sıfırlansın
+  const newEdited = safeEdited(currentGame).map((r) => [...r]);
+  newEdited[round] = [false, false];
+
+  const updates = {
+    scores: newScores,
+    edited: newEdited,
+    status: "active",
+    winner: null
+  };
 
   const { data, error } = await sbClient
     .from("games")
@@ -285,14 +328,12 @@ async function deleteRow(round) {
     return;
   }
 
-  if (data) currentGame = data;
-  else Object.assign(currentGame, updates);
-
+  currentGame = data || Object.assign({}, currentGame, updates);
   renderGame();
 }
 
 // =====================================================================
-// REALTIME (canlı izləmə)
+// REALTIME (eyni oyunu başqa cihazda davam etdirmək üçün)
 // =====================================================================
 
 function setLiveStatus(isLive, text) {
@@ -337,7 +378,6 @@ function subscribeRealtime(gameId) {
         setLiveStatus(true, "Canlı");
       } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
         setLiveStatus(false, "Yenidən bağlanır...");
-        // 2 saniyə sonra yenidən
         setTimeout(() => {
           if (currentGame && currentGame.id === gameId) {
             subscribeRealtime(gameId);
@@ -354,7 +394,6 @@ function subscribeRealtime(gameId) {
 // =====================================================================
 
 function applyOwnerContext(game) {
-  // Bu cihazda owner token varsa client-i token-li versiyaya keçir
   const localToken = localStorage.getItem(LS_OWNER_PREFIX + game.id);
   if (localToken && localToken === game.owner_token) {
     isOwner = true;
@@ -371,7 +410,6 @@ async function startNewGame() {
   const p1 = $("player1-input").value.trim();
   const p2 = $("player2-input").value.trim();
 
-  // Mütləq ad yoxlaması
   $("player1-input").classList.remove("error");
   $("player2-input").classList.remove("error");
   let valid = true;
@@ -386,7 +424,7 @@ async function startNewGame() {
 
   try {
     const token = uuid();
-    const joinCode = await generateUniqueJoinCode();
+    const joinCode = await generateUniqueJoinCode(); // backend tələbi, UI-də görünmür
 
     const { data, error } = await sbAnon
       .from("games")
@@ -395,14 +433,14 @@ async function startNewGame() {
         owner_token: token,
         player1: p1,
         player2: p2,
-        scores: emptyScores()
+        scores: emptyScores(),
+        edited: emptyEdited()
       })
       .select()
       .single();
 
     if (error) throw error;
 
-    // Lokal yadda saxla
     localStorage.setItem(LS_CURRENT_GAME, data.id);
     localStorage.setItem(LS_OWNER_PREFIX + data.id, token);
 
@@ -416,48 +454,6 @@ async function startNewGame() {
   } catch (e) {
     console.error(e);
     alert("Oyun yaradıla bilmədi: " + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = originalText;
-  }
-}
-
-async function joinGame() {
-  const code = $("join-code-input").value.trim();
-  $("join-message").innerHTML = "";
-
-  if (!/^\d{4}$/.test(code)) {
-    $("join-message").innerHTML = '<div class="message error">4 rəqəmli kod yaz</div>';
-    return;
-  }
-
-  const btn = $("join-game-btn");
-  btn.disabled = true;
-  const originalText = btn.textContent;
-  btn.textContent = "Axtarılır...";
-
-  try {
-    const { data, error } = await sbAnon
-      .from("games")
-      .select("*")
-      .eq("join_code", code)
-      .maybeSingle();
-
-    if (error) throw error;
-    if (!data) {
-      $("join-message").innerHTML = '<div class="message error">Bu kodla oyun yoxdur</div>';
-      return;
-    }
-
-    localStorage.setItem(LS_CURRENT_GAME, data.id);
-    currentGame = data;
-    applyOwnerContext(data);
-
-    showGame();
-    subscribeRealtime(data.id);
-  } catch (e) {
-    $("join-message").innerHTML =
-      '<div class="message error">Xəta: ' + escapeHTML(e.message) + "</div>";
   } finally {
     btn.disabled = false;
     btn.textContent = originalText;
@@ -482,7 +478,6 @@ async function restoreGame() {
 
     currentGame = data;
     applyOwnerContext(data);
-
     showGame();
     subscribeRealtime(data.id);
     return true;
@@ -494,7 +489,6 @@ async function restoreGame() {
 
 function clearCurrentGame() {
   localStorage.removeItem(LS_CURRENT_GAME);
-  // owner_token-i saxlayırıq ki, istifadəçi həmin oyuna sonra qayıdanda owner qalsın
   currentGame = null;
   ownerToken = null;
   isOwner = false;
@@ -508,68 +502,14 @@ function leaveCurrentGame() {
   showHome();
 }
 
-function copyJoinCode() {
-  const code = currentGame?.join_code;
-  if (!code) return;
-  const btn = $("copy-code-btn");
-  const restore = () => {
-    btn.textContent = "Kopyala";
-    btn.classList.remove("copied");
-  };
-
-  const ok = () => {
-    btn.textContent = "Kopyalandı ✓";
-    btn.classList.add("copied");
-    setTimeout(restore, 1500);
-  };
-
-  if (navigator.clipboard?.writeText) {
-    navigator.clipboard.writeText(code).then(ok).catch(() => {
-      fallbackCopy(code, ok);
-    });
-  } else {
-    fallbackCopy(code, ok);
-  }
-}
-
-function fallbackCopy(text, onSuccess) {
-  const ta = document.createElement("textarea");
-  ta.value = text;
-  ta.style.position = "fixed";
-  ta.style.opacity = "0";
-  document.body.appendChild(ta);
-  ta.select();
-  try {
-    document.execCommand("copy");
-    onSuccess();
-  } catch (e) {
-    console.warn("Kopyalama uğursuz:", e);
-  }
-  document.body.removeChild(ta);
-}
-
 // =====================================================================
 // INIT
 // =====================================================================
 
 function bindEvents() {
   $("start-game-btn").addEventListener("click", startNewGame);
-  $("join-game-btn").addEventListener("click", joinGame);
   $("new-game-btn").addEventListener("click", leaveCurrentGame);
-  $("copy-code-btn").addEventListener("click", copyJoinCode);
 
-  // Join kod input — yalnız 4 rəqəm
-  $("join-code-input").addEventListener("input", (e) => {
-    e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4);
-  });
-  $("join-code-input").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      joinGame();
-    }
-  });
-
-  // Ad sahələrinin error vəziyyətini təmizlə
   $("player1-input").addEventListener("input", () =>
     $("player1-input").classList.remove("error")
   );
@@ -577,7 +517,6 @@ function bindEvents() {
     $("player2-input").classList.remove("error")
   );
 
-  // Enter ad sahələrində oyun başlatsın
   [$("player1-input"), $("player2-input")].forEach((el) => {
     el.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {

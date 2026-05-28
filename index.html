@@ -37,30 +37,10 @@
         <button id="start-game-btn" class="btn btn-primary">Oyuna Başla</button>
       </div>
 
-      <div class="card">
-        <h2 class="card-title">Oyuna Qoşul</h2>
-        <input
-          type="text"
-          id="join-code-input"
-          class="input"
-          placeholder="4 rəqəmli kod"
-          inputmode="numeric"
-          pattern="[0-9]*"
-          maxlength="4"
-          autocomplete="off">
-        <button id="join-game-btn" class="btn btn-secondary">Qoşul</button>
-        <div id="join-message"></div>
-      </div>
     </div>
 
     <!-- ===== Game view ===== -->
     <div id="game-view" style="display: none;">
-      <div class="join-code">
-        <div class="join-code-label">Rəqibə bu kodu de</div>
-        <div class="join-code-value" id="join-code-display">----</div>
-        <button id="copy-code-btn" class="copy-btn">Kopyala</button>
-      </div>
-
       <div class="game-toolbar">
         <div class="live-indicator" id="live-indicator">
           <div class="live-dot"></div>

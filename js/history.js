@@ -85,17 +85,26 @@ function openDetail(id) {
   const s1 = calcSum(g.scores, 0);
   const s2 = calcSum(g.scores, 1);
 
+  // edit sahəsi köhnə oyunlarda yoxdur — təhlükəsiz fallback
+  const edited = Array.isArray(g.edited) && g.edited.length === 5
+    ? g.edited
+    : [[false,false],[false,false],[false,false],[false,false],[false,false]];
+
+  const editMark = '<span class="edit-mark">✎ düzəldildi</span>';
+
   let rowsHTML = "";
   for (let i = 0; i < 5; i++) {
     const v1 = g.scores[i][0] !== null ? g.scores[i][0] : "—";
     const v2 = g.scores[i][1] !== null ? g.scores[i][1] : "—";
     const empty1 = g.scores[i][0] === null ? " empty" : "";
     const empty2 = g.scores[i][1] === null ? " empty" : "";
+    const mark1 = edited[i][0] && g.scores[i][0] !== null ? editMark : "";
+    const mark2 = edited[i][1] && g.scores[i][1] !== null ? editMark : "";
     rowsHTML += `
       <tr>
         <td class="round-label">${i + 1}</td>
-        <td class="score-cell${empty1}">${v1}</td>
-        <td class="score-cell${empty2}">${v2}</td>
+        <td class="score-cell${empty1}">${v1}${mark1}</td>
+        <td class="score-cell${empty2}">${v2}${mark2}</td>
       </tr>
     `;
   }
