@@ -525,21 +525,20 @@ html, body {
   gap: 4px;
 }
 
-/* 🔓 / 🔒 sıra lock toggle */
+/* 🔓 / 🔒 sıra lock vizual göstəricisi (click yoxdur — yalnız status) */
 .lock-row-btn {
   background: transparent;
   border: none;
   font-size: 18px;
   line-height: 1;
-  cursor: pointer;
+  cursor: default;
   padding: 4px 8px;
   border-radius: 6px;
   font-family: inherit;
-  transition: background var(--transition), opacity var(--transition), transform var(--transition);
+  opacity: 0.4;
+  transition: opacity var(--transition);
 }
-.lock-row-btn:hover:not(:disabled) { background: var(--accent-soft); }
-.lock-row-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-.lock-row-btn:active:not(:disabled) { transform: scale(0.9); }
+.lock-row-btn.locked-state { opacity: 1; }
 
 /* Row tam dolu amma kilidlənməyib → qırmızı kənar siqnalı */
 tbody tr.row-needs-lock td {

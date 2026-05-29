@@ -363,14 +363,14 @@ function renderScoreTable() {
         wrap.appendChild(delBtn);
       }
 
-      // Lock toggle (həmişə görünür)
+      // Lock göstərici — vizual yalnız, click yoxdur
+      // Avto-lock col 1 dolduqda baş verir, permanent (acmaq olmaz)
       const lockBtn = document.createElement("button");
       lockBtn.type = "button";
-      lockBtn.className = "lock-row-btn";
-      lockBtn.disabled = !isLocked && !rowIsFull;
+      lockBtn.className = "lock-row-btn" + (isLocked ? " locked-state" : "");
+      lockBtn.disabled = true;
       lockBtn.textContent = isLocked ? "🔒" : "🔓";
-      lockBtn.title = isLocked ? "Sıranı aç" : "Sıranı kilidlə";
-      lockBtn.addEventListener("click", () => lockRow(i));
+      lockBtn.title = isLocked ? "Sıra kilidlənib" : "Sıra hələ açıqdır";
       wrap.appendChild(lockBtn);
 
       tdAction.appendChild(wrap);
@@ -686,10 +686,11 @@ function updateCellDOM(round, col) {
     delBtn.remove();
   }
 
-  // Lock button — disabled state
+  // Lock göstərici — text və state class update
   const lockBtn = wrap.querySelector(".lock-row-btn");
   if (lockBtn) {
-    lockBtn.disabled = !isLocked && !rowIsFull;
+    lockBtn.textContent = isLocked ? "🔒" : "🔓";
+    lockBtn.classList.toggle("locked-state", isLocked);
   }
 }
 
@@ -823,44 +824,8 @@ async function quickEnd(round, col) {
 }
 
 // 🔓 / 🔒 — Sıranı lock / unlock et
-async function lockRow(round) {
-  if (!isOwner || !ownerToken) return;
-
-  const lockedArr = safeLocked(currentGame).slice();
-  const isLocked = lockedArr[round] === true;
-
-  if (!isLocked) {
-    // Lock — row tam dolu olmalıdır
-    if (
-      currentGame.scores[round][0] === null ||
-      currentGame.scores[round][1] === null
-    ) {
-      toast(`${round + 1}-ci əldə boş xana var — əvvəl doldur`, "error", 3500);
-      return;
-    }
-  }
-
-  lockedArr[round] = !isLocked;
-
-  const { data, error } = await sbClient
-    .from("games")
-    .update({ locked: lockedArr })
-    .eq("id", currentGame.id)
-    .select()
-    .maybeSingle();
-
-  if (error) {
-    toast(
-      (isLocked ? "Açıla bilmədi: " : "Kilidlənə bilmədi: ") + error.message,
-      "error",
-      4000
-    );
-    return;
-  }
-
-  currentGame = data || Object.assign({}, currentGame, { locked: lockedArr });
-  renderGame();
-}
+// lockRow silindi — lock yalnız avto-baş verir (col 1 yazıldıqda)
+// və permanent-dir, manual açmaq olmaz
 
 // =====================================================================
 // REALTIME
