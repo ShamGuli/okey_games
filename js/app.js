@@ -485,6 +485,14 @@ async function updateScore(round, col, value, oldValue) {
     newEdited[round][col] = true;
   }
 
+  // Avto-lock: row tam dolu olduqda avtomatik kilidlən
+  const lockedArr = safeLocked(currentGame).slice();
+  const rowNowFull =
+    newScores[round][0] !== null && newScores[round][1] !== null;
+  if (rowNowFull && !lockedArr[round]) {
+    lockedArr[round] = true;
+  }
+
   const visible = Number(currentGame.visible_rows) || 1;
   let newStatus = "active";
   let newWinner = null;
@@ -497,11 +505,13 @@ async function updateScore(round, col, value, oldValue) {
   const updates = {
     scores: newScores,
     edited: newEdited,
+    locked: lockedArr,
     status: newStatus,
     winner: newWinner
   };
 
   const wasStatus = currentGame.status;
+  const wasLockedRow = safeLocked(currentGame)[round] === true;
 
   const { data, error } = await sbClient
     .from("games")
@@ -517,8 +527,11 @@ async function updateScore(round, col, value, oldValue) {
   }
 
   currentGame = data || Object.assign({}, currentGame, updates);
+  const isLockedRow = safeLocked(currentGame)[round] === true;
 
-  if (wasStatus !== currentGame.status) {
+  // Status keçidi VƏ YA lock dəyişikliyi → tam render
+  // (lock olunmuş row input-dan mətnə çevrilməlidir)
+  if (wasStatus !== currentGame.status || wasLockedRow !== isLockedRow) {
     renderGame();
     if (currentGame.status === "finished") {
       toast(
@@ -532,7 +545,7 @@ async function updateScore(round, col, value, oldValue) {
     return;
   }
 
-  // Status eynidir → yalnız dəyişən cell-i partial update et
+  // Status eynidir + lock dəyişməyib → yalnız dəyişən cell-i partial update et
   updateCellDOM(round, col);
   updateSums();
   renderAddRoundBtn();

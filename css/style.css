@@ -621,6 +621,21 @@ tbody tr.row-locked td {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.winner-diff-wrap {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+.winner-diff {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
 
 /* ----- Toast notifications ----- */
 .toast-container {

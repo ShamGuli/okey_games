@@ -117,17 +117,70 @@ function openDetail(id) {
     `;
   }
 
-  let winnerHTML = "";
+  // Lider/qalib kartı (fərq də göstərilir)
+  const s1 = calcSum(g.scores, 0);
+  const s2 = calcSum(g.scores, 1);
+  const hasScore = s1 !== 0 || s2 !== 0;
+
+  let leaderHTML = "";
   if (g.status === "finished") {
-    const trophy = g.winner === "tie" ? "🤝" : "🏆";
-    const name = g.winner === "tie" ? "Bərabərlik" : escapeHTML(g.winner);
-    winnerHTML = `
+    const isTie = g.winner === "tie";
+    const trophy = isTie ? "🤝" : "🏆";
+    const name = isTie ? "Bərabərlik" : escapeHTML(g.winner);
+    const diff = Math.abs(s1 - s2);
+    const diffHTML = isTie
+      ? ""
+      : `<div class="winner-diff-wrap">
+           <div class="winner-label">FƏRQ</div>
+           <div class="winner-diff">${diff}</div>
+         </div>`;
+    leaderHTML = `
       <div class="winner-box">
         <div class="winner-trophy">${trophy}</div>
-        <div class="winner-label">Qalib</div>
-        <div class="winner-name">${name}</div>
+        <div class="winner-text-wrap">
+          <div class="winner-label">Qalib</div>
+          <div class="winner-name">${name}</div>
+        </div>
+        ${diffHTML}
       </div>
     `;
+  } else if (hasScore) {
+    // Aktiv oyun — LİDER kartı
+    if (s1 === s2) {
+      leaderHTML = `
+        <div class="leader-card tied">
+          <div class="leader-left">
+            <div class="leader-avatar">🤝</div>
+            <div class="leader-text">
+              <div class="leader-label">VƏZİYYƏT</div>
+              <div class="leader-name">Bərabər</div>
+            </div>
+          </div>
+          <div class="leader-right">
+            <div class="leader-diff-label">FƏRQ</div>
+            <div class="leader-diff">0</div>
+          </div>
+        </div>
+      `;
+    } else {
+      const leadingName = s1 < s2 ? g.player1 : g.player2;
+      const diff = Math.abs(s1 - s2);
+      leaderHTML = `
+        <div class="leader-card">
+          <div class="leader-left">
+            <div class="leader-avatar">👑</div>
+            <div class="leader-text">
+              <div class="leader-label">LİDER</div>
+              <div class="leader-name">${escapeHTML(leadingName)}</div>
+            </div>
+          </div>
+          <div class="leader-right">
+            <div class="leader-diff-label">FƏRQ</div>
+            <div class="leader-diff">${diff}</div>
+          </div>
+        </div>
+      `;
+    }
   }
 
   $("detail-content").innerHTML = `
@@ -136,7 +189,7 @@ function openDetail(id) {
       <span>·</span>
       <span>Kod: <strong>${escapeHTML(g.join_code)}</strong></span>
     </div>
-    ${winnerHTML}
+    ${leaderHTML}
     <div class="score-table-wrap" style="margin-top: 12px;">
       <table class="score-table">
         <thead>
