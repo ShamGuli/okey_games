@@ -117,9 +117,7 @@ function openDetail(id) {
     `;
   }
 
-  // Lider/qalib kartı (fərq də göstərilir)
-  const s1 = calcSum(g.scores, 0);
-  const s2 = calcSum(g.scores, 1);
+  // Lider/qalib kartı (fərq də göstərilir) — s1, s2 yuxarıda hesablanıb
   const hasScore = s1 !== 0 || s2 !== 0;
 
   let leaderHTML = "";
